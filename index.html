@@ -443,6 +443,10 @@ function financeView(){
     '<div class="fld"><label for="v-fee">Commission du club (€)</label><input id="v-fee" type="number" inputmode="decimal" step="0.01" min="0" value="0"></div>'+
     '<div class="fld"><label for="v-note">Note</label><input id="v-note" type="text"></div></div>'+
     '<button type="submit" class="btn">Enregistrer la vente</button></form></details>';
+  h+='<details class="panel set" data-key="imp"'+(openSet.has('imp')?' open':'')+'><summary><span class="h2">Importer des ventes</span><span class="chev" aria-hidden="true"></span></summary>'+
+    '<p class="note">Colle une vente par ligne : <strong>date;libellé;prix de la paire;commission;n° de lot</strong> (par exemple 2026-09-12;Paris FC – Lyon;130,00;15,60;1765). Une vente déjà importée (même n° de lot) est ignorée.</p>'+
+    '<div class="fld" style="margin-top:12px"><label for="imp-text">Lignes à importer</label><textarea id="imp-text" rows="6" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:14px var(--f-body)"></textarea></div>'+
+    '<button type="button" class="btn" data-act="import" style="margin-top:12px">Importer</button></details>';
   h+=sumTable('Par saison',groupBy(list,seasonOf),'Saison')+sumTable('Par année fiscale',groupBy(list,fiscalOf),'Année');
   if(list.length){
     h+='<section class="panel" aria-labelledby="h-det"><h2 id="h-det">Détail des ventes</h2><div class="vlist">'+list.map(function(v){
@@ -453,6 +457,23 @@ function financeView(){
     }).join('')+'</div></section>';
   }
   return h;
+}
+async function importVentes(text){
+  var lines=String(text||'').split(/\r?\n/).map(function(x){return x.trim();}).filter(Boolean);
+  var o={},bad=0,dup=0;
+  lines.forEach(function(l){
+    var c=l.split(';').map(function(x){return x.trim();});
+    if(c.length<4||!/^\d{4}-\d{2}-\d{2}$/.test(c[0])){bad++;return;}
+    var lot=c[4]||'';var id=lot?('vlot'+lot.replace(/\W/g,'')):('v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
+    if(ventes.some(function(v){return v.id===id;})||o[id]){dup++;return;}
+    o[id]={date:c[0],label:c[1],matchId:null,price:num(c[2])||0,fee:num(c[3])||0,note:lot?('Lot '+lot):'',by:who};
+  });
+  var ids=Object.keys(o);
+  if(!ids.length){toast(bad?'Aucune ligne valide (format : date;libellé;prix;commission;lot).':'Rien de nouveau à importer.');return;}
+  ids.forEach(function(k){var r=o[k];r.id=k;ventes.push(r);});
+  openSet.delete('imp');render();
+  try{await vref().set({v:o},{merge:true});toast(ids.length+' vente(s) importée(s)'+(dup?', '+dup+' déjà présente(s)':'')+(bad?', '+bad+' ligne(s) ignorée(s)':'')+'.');}
+  catch(e){if(isAuthError(e)){await logout();return;}toast('Import impossible : '+(e.message||e.code));await refresh();}
 }
 async function saveVente(rec){
   var o={};o[rec.id]=rec;
@@ -640,6 +661,7 @@ app.addEventListener('click',async function(e){
   if(act==='export'){exportXlsx();return;}
   if(!db||state!=='ok')return;
   if(act==='check'){patchCfg({lastCheck:new Date().toISOString(),lastCheckBy:who});toast('Vérification notée.');return;}
+  if(act==='import'){var ta=document.getElementById('imp-text');importVentes(ta?ta.value:'');return;}
   if(act==='delvente'){deleteVente(id);return;}
   var m=find(id);if(!m)return;
   if(act==='status'){
