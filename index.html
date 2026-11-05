@@ -458,14 +458,18 @@ function srcLabel(v){
   if(v.source==='billetterie')return 'Récupérée depuis la billetterie'+(v.edited?' · modifiée à la main par '+v.edited:'')+(v.by?' (importée par '+v.by+')':'');
   return 'Saisie manuelle'+(v.by?' par '+v.by:'');
 }
+function sellerLabel(v){
+  if(!v.seller)return 'à renseigner';
+  return v.seller+(v.sellerSrc==='billetterie'?' · d’après le titulaire du compte bancaire sur la billetterie':(v.sellerBy?' · saisi par '+v.sellerBy:''));
+}
 function balance(){
   var us=sellers(),enc={},tin={},tout={};
   us.forEach(function(n){enc[n]=0;tin[n]=0;tout[n]=0;});
-  var un=0;
-  ventes.forEach(function(v){if(enc[v.seller]!==undefined)enc[v.seller]+=netOf(v);else un++;});
+  var un=0,pend=0,pendN=0;
+  ventes.forEach(function(v){if(enc[v.seller]===undefined){un++;return;}if(v.reglement==='attente'){pend+=netOf(v);pendN++;return;}enc[v.seller]+=netOf(v);});
   transfers.forEach(function(t){if(tout[t.from]!==undefined)tout[t.from]+=t.amount;if(tin[t.to]!==undefined)tin[t.to]+=t.amount;});
   var tot=us.reduce(function(s,n){return s+enc[n];},0),fair=us.length?tot/us.length:0;
-  return {un:un,tot:tot,fair:fair,rows:us.map(function(n){return {n:n,enc:enc[n],out:tout[n],inn:tin[n],bal:r2(enc[n]-tout[n]+tin[n]-fair)};})};
+  return {un:un,pend:pend,pendN:pendN,tot:tot,fair:fair,rows:us.map(function(n){return {n:n,enc:enc[n],out:tout[n],inn:tin[n],bal:r2(enc[n]-tout[n]+tin[n]-fair)};})};
 }
 function balanceView(){
   var b=balance(),h='<section class="panel" aria-labelledby="h-bal"><h2 id="h-bal">Qui a encaissé, qui doit quoi</h2>';
@@ -477,6 +481,7 @@ function balanceView(){
   else msg=b.rows.map(function(r){return esc(r.n)+' : '+(r.bal>0?'doit '+eur(r.bal):r.bal<0?'doit recevoir '+eur(-r.bal):'à jour');}).join(' · ');
   h+='<p class="verdict">'+msg+'</p>';
   if(b.un)h+='<p class="note warn-n">'+b.un+' vente(s) sans vendeur renseigné : elles ne sont pas comptées ici. Choisis le vendeur dans « Détail des ventes ».</p>';
+  if(b.pendN)h+='<p class="note warn-n">'+b.pendN+' vente(s) en attente de règlement par le club ('+eur(b.pend)+') : pas encore comptée(s) dans ce qui a été encaissé.</p>';
   h+='<div class="tbl"><table><thead><tr><th scope="col">Qui</th><th scope="col">Encaissé</th><th scope="col">Viré</th><th scope="col">Reçu</th><th scope="col">Solde</th></tr></thead><tbody>'+
     b.rows.map(function(r){return '<tr><th scope="row">'+esc(r.n)+'</th><td>'+eur(r.enc)+'</td><td>'+eur(r.out)+'</td><td>'+eur(r.inn)+'</td><td>'+(r.bal>0.005?'doit '+eur(r.bal):r.bal<-0.005?'reçoit '+eur(-r.bal):'0 €')+'</td></tr>';}).join('')+'</tbody></table></div>';
   h+='<p class="note">Encaissé = net des ventes dont la personne est le vendeur (c’est elle qui reçoit le virement du club). Part de chacun = total net ÷ nombre de personnes (actuellement '+eur(b.fair)+' chacun). Solde = encaissé − virements faits + virements reçus − part.</p>';
@@ -524,9 +529,11 @@ function financeView(){
       function f(label,field,val,type){return '<div class="fld"><label for="vf-'+field+'-'+esc(v.id)+'">'+label+'</label><input id="vf-'+field+'-'+esc(v.id)+'" type="'+type+'" '+(type==='number'?'inputmode="decimal" step="0.01" min="0" ':'')+'data-vf="'+field+'" data-vid="'+esc(v.id)+'" value="'+esc(val==null?'':val)+'"></div>';}
       return '<div class="vrow"><div class="vhead"><b>'+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOf(v.date))+' · net '+eur(netOf(v))+'</span>'+
         '<span class="src '+(v.source==='billetterie'?'bil':'man')+'">'+esc(srcLabel(v))+'</span>'+
-        '<span class="muted">Vendu par : <b>'+(v.seller?esc(v.seller):'à renseigner')+'</b></span></div>'+
+        '<span class="muted">Vendu par (a reçu le virement) : <b>'+esc(sellerLabel(v))+'</b></span>'+
+        '<span class="src '+(v.reglement==='attente'?'man':'bil')+'">'+(v.reglement==='attente'?'Règlement du club en attente':'Règlement versé')+'</span></div>'+
         '<div class="grid">'+f('Date','date',v.date,'date')+f('Prix (€)','price',v.price,'number')+f('Commission (€)','fee',v.fee,'number')+f('Libellé','label',v.label,'text')+
-          '<div class="fld"><label for="vf-seller-'+esc(v.id)+'">Vendu par</label><select id="vf-seller-'+esc(v.id)+'" data-vf="seller" data-vid="'+esc(v.id)+'">'+selOpts(v.seller,true)+'</select></div></div>'+
+          '<div class="fld"><label for="vf-seller-'+esc(v.id)+'">Vendu par</label><select id="vf-seller-'+esc(v.id)+'" data-vf="seller" data-vid="'+esc(v.id)+'">'+selOpts(v.seller,true)+'</select></div>'+
+          '<div class="fld"><label for="vf-reglement-'+esc(v.id)+'">Règlement du club</label><select id="vf-reglement-'+esc(v.id)+'" data-vf="reglement" data-vid="'+esc(v.id)+'"><option value="verse"'+(v.reglement!=='attente'?' selected':'')+'>Versé</option><option value="attente"'+(v.reglement==='attente'?' selected':'')+'>En attente</option></select></div></div>'+
         '<button type="button" class="btn ghost small" data-act="delvente" data-id="'+esc(v.id)+'">Supprimer cette vente</button></div>';
     }).join('')+'</div></section>';
   }
@@ -540,7 +547,7 @@ async function importVentes(text){
     if(c.length<4||!/^\d{4}-\d{2}-\d{2}$/.test(c[0])){bad++;return;}
     var lot=c[4]||'';var id=lot?('vlot'+lot.replace(/\W/g,'')):('v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
     if(ventes.some(function(v){return v.id===id;})||o[id]){dup++;return;}
-    o[id]={date:c[0],label:c[1],matchId:null,price:num(c[2])||0,fee:num(c[3])||0,note:lot?('Lot '+lot):'',by:who,seller:(document.getElementById('imp-seller')||{}).value||'',source:lot?'billetterie':'manuel'};
+    o[id]={date:c[0],label:c[1],matchId:null,price:num(c[2])||0,fee:num(c[3])||0,note:lot?('Lot '+lot):'',by:who,seller:(document.getElementById('imp-seller')||{}).value||'',sellerSrc:'manuel',sellerBy:who,reglement:'verse',source:lot?'billetterie':'manuel'};
   });
   var ids=Object.keys(o);
   if(!ids.length){toast(bad?'Aucune ligne valide (format : date;libellé;prix;commission;lot).':'Rien de nouveau à importer.');return;}
@@ -557,7 +564,7 @@ async function saveVente(rec){
   catch(e){if(isAuthError(e)){await logout();return;}toast('Enregistrement impossible : '+(e.message||e.code));await refresh();}
 }
 function newSale(d){
-  var rec={id:'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),date:d.date,label:d.label||'',matchId:d.matchId||null,price:num(d.price)||0,fee:num(d.fee)||0,note:d.note||'',by:who,seller:d.seller===undefined?who:d.seller,source:d.source||'manuel'};
+  var rec={id:'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),date:d.date,label:d.label||'',matchId:d.matchId||null,price:num(d.price)||0,fee:num(d.fee)||0,note:d.note||'',by:who,seller:d.seller===undefined?who:d.seller,sellerSrc:'manuel',sellerBy:who,reglement:'verse',source:d.source||'manuel'};
   return saveVente(rec);
 }
 function ensureSale(m){
@@ -575,7 +582,7 @@ function exportXlsx(){
   var X=window.XLSX,list=sortedVentes().slice().reverse();
   var EUR='#,##0.00 "€"';
   var ws={},n=list.length,last=n+1;
-  var head=['Date','Match','Saison','Année fiscale','Prix de vente (paire)','Commission','Net perçu','Par personne','Saisi par','Note','Vendu par (a encaissé)','Origine'];
+  var head=['Date','Match','Saison','Année fiscale','Prix de vente (paire)','Commission','Net perçu','Par personne','Saisi par','Note','Vendu par (a encaissé)','Origine','Origine du vendeur','Règlement du club'];
   head.forEach(function(h,c){ws[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
   list.forEach(function(v,i){
     var r=i+1,R=r+1,d=new Date(v.date+'T00:00:00Z');
@@ -583,16 +590,16 @@ function exportXlsx(){
     put(0,{t:'d',v:d,z:'dd/mm/yyyy'});put(1,{t:'s',v:v.label||''});put(2,{t:'s',v:seasonOf(v.date)});put(3,{t:'s',v:fiscalOf(v.date)});
     put(4,{t:'n',v:v.price,z:EUR});put(5,{t:'n',v:v.fee,z:EUR});
     put(6,{t:'n',v:netOf(v),f:'E'+R+'-F'+R,z:EUR});put(7,{t:'n',v:netOf(v)/2,f:'G'+R+'/2',z:EUR});
-    put(8,{t:'s',v:v.by||''});put(9,{t:'s',v:v.note||''});put(10,{t:'s',v:v.seller||''});put(11,{t:'s',v:v.source==='billetterie'?'Billetterie'+(v.edited?' (modifiée par '+v.edited+')':''):'Saisie manuelle'});
+    put(8,{t:'s',v:v.by||''});put(9,{t:'s',v:v.note||''});put(10,{t:'s',v:v.seller||''});put(12,{t:'s',v:v.sellerSrc==='billetterie'?'Billetterie (titulaire du compte bancaire)':('Saisi à la main'+(v.sellerBy?' par '+v.sellerBy:''))});put(13,{t:'s',v:v.reglement==='attente'?'En attente':'Versé'});put(11,{t:'s',v:v.source==='billetterie'?'Billetterie'+(v.edited?' (modifiée par '+v.edited+')':''):'Saisie manuelle'});
   });
   var tr=n+1,TR=tr+1,tot={p:0,f:0,n:0};list.forEach(function(v){tot.p+=v.price;tot.f+=v.fee;tot.n+=netOf(v);});
   if(n){
     ws[X.utils.encode_cell({r:tr,c:1})]={t:'s',v:'TOTAL'};
     [['E',4,tot.p],['F',5,tot.f],['G',6,tot.n],['H',7,tot.n/2]].forEach(function(a){ws[X.utils.encode_cell({r:tr,c:a[1]})]={t:'n',v:a[2],f:'SUM('+a[0]+'2:'+a[0]+last+')',z:EUR};});
   }
-  ws['!ref']='A1:L'+(n?TR:1);
-  ws['!cols']=[{wch:12},{wch:30},{wch:10},{wch:13},{wch:20},{wch:13},{wch:13},{wch:14},{wch:12},{wch:30},{wch:22},{wch:30}];
-  ws['!autofilter']={ref:'A1:L'+(n?last:1)};
+  ws['!ref']='A1:N'+(n?TR:1);
+  ws['!cols']=[{wch:12},{wch:30},{wch:10},{wch:13},{wch:20},{wch:13},{wch:13},{wch:14},{wch:12},{wch:30},{wch:22},{wch:30},{wch:36},{wch:18}];
+  ws['!autofilter']={ref:'A1:N'+(n?last:1)};
   function summary(groups,col,keyHead){
     var s={},hd=[keyHead,'Nombre de ventes','Brut','Commission','Net perçu','Par personne'];
     hd.forEach(function(h,c){s[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
@@ -629,7 +636,7 @@ function exportXlsx(){
     var vr=function(L){return 'Ventes!$'+L+'$2:$'+L+'$'+Math.max(last,2);},tr_=function(L){return 'Virements!$'+L+'$2:$'+L+'$'+tlast;};
     b.rows.forEach(function(r,i){var R=i+2;function p(c,cell){dc[X.utils.encode_cell({r:i+1,c:c})]=cell;}
       p(0,{t:'s',v:r.n});
-      p(1,{t:'n',v:r.enc,f:'SUMIF('+vr('K')+',A'+R+','+vr('G')+')',z:EUR});
+      p(1,{t:'n',v:r.enc,f:'SUMIFS('+vr('G')+','+vr('K')+',A'+R+','+vr('N')+',"Versé")',z:EUR});
       p(2,{t:'n',v:b.fair,f:'SUM($B$2:$B$'+(ub+1)+')/'+ub,z:EUR});
       p(3,{t:'n',v:r.out,f:'SUMIF('+tr_('B')+',A'+R+','+tr_('D')+')',z:EUR});
       p(4,{t:'n',v:r.inn,f:'SUMIF('+tr_('C')+',A'+R+','+tr_('D')+')',z:EUR});
@@ -683,11 +690,13 @@ async function reload(){
   ventes=Object.keys(vm).map(function(k){var r=vm[k];r.id=k;r.price=num(r.price)||0;r.fee=num(r.fee)||0;
     if(!r.source)r.source=/^vlot/.test(k)?'billetterie':'manuel';
     if(r.seller===undefined)r.seller=/^vlot/.test(k)?'Sylvain':'';
+    if(!r.sellerSrc)r.sellerSrc=r.seller&&/^vlot/.test(k)?'billetterie':'manuel';
+    if(!r.reglement)r.reglement='verse';
     return r;});
   var tm=(vd.exists&&vd.data().t)||{};
   transfers=Object.keys(tm).map(function(k){var r=tm[k];r.id=k;r.amount=num(r.amount)||0;return r;}).sort(function(x,y){return String(y.date).localeCompare(String(x.date));});
   var mig={},nm=0;
-  ventes.forEach(function(x){var raw=vm[x.id]||{};if(raw.source===undefined||raw.seller===undefined){mig[x.id]={source:x.source,seller:x.seller};nm++;}});
+  ventes.forEach(function(x){var raw=vm[x.id]||{};if(raw.source===undefined||raw.seller===undefined||raw.sellerSrc===undefined||raw.reglement===undefined){mig[x.id]={source:x.source,seller:x.seller,sellerSrc:x.sellerSrc,reglement:x.reglement};nm++;}});
   if(nm){try{await vref().set({v:mig},{merge:true});}catch(e){}}
 }
 function isTyping(){var a=document.activeElement;return !!(a&&a.tagName==='INPUT'&&app.contains(a));}
@@ -800,6 +809,7 @@ app.addEventListener('change',function(e){
     var vv=ventes.filter(function(x){return x.id===t.dataset.vid;})[0];if(!vv)return;
     var nv=Object.assign({},vv),ff=t.dataset.vf;
     if(ff==='price'||ff==='fee')nv[ff]=num(t.value)||0;else if(ff==='date'){if(!t.value)return;nv[ff]=t.value;}else nv[ff]=t.value;
+    if(ff==='seller'){nv.sellerSrc='manuel';nv.sellerBy=who;}
     if(nv.source==='billetterie'&&(ff==='price'||ff==='fee'||ff==='date'))nv.edited=who;
     saveVente(nv);return;
   }
@@ -892,4 +902,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build seller2 -->
+<!-- build reglement -->
