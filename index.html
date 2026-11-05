@@ -30,6 +30,7 @@
 .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .hd>div{min-width:0}
 .sw{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 4px 0 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font:600 12px var(--f-body);letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+.swl{min-width:46px;text-align:right}
 .sw i{display:block;width:34px;height:20px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);position:relative}
 .sw i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform .15s}
 .sw[aria-checked="true"] i{background:var(--accent)}
@@ -356,7 +357,7 @@ function lastCheckText(){
 }
 
 function isDark(){return document.documentElement.getAttribute('data-theme')==='dark';}
-function titleBlock(sub){return '<header class="hd"><div><h1>Revente Jean-Bouin</h1><p class="sub">'+esc(sub)+'</p></div><button type="button" class="sw" role="switch" data-act="theme" aria-checked="'+isDark()+'" aria-label="Thème sombre">Sombre<i></i></button></header>';}
+function titleBlock(sub){return '<header class="hd"><div><h1>Revente Jean-Bouin</h1><p class="sub">'+esc(sub)+'</p></div><button type="button" class="sw" role="switch" data-act="theme" aria-checked="'+isDark()+'" aria-label="Thème sombre"><span class="swl">'+(isDark()?'Sombre':'Clair')+'</span><i></i></button></header>';}
 
 function setupView(){
   return titleBlock('Configuration à terminer')+'<section class="panel"><h2>Il manque la configuration</h2>'+
@@ -674,7 +675,7 @@ async function patchCfg(patch){
 app.addEventListener('click',async function(e){
   var t=e.target.closest('[data-act]');if(!t)return;
   var act=t.dataset.act,id=t.dataset.id;
-  if(act==='theme'){var d=!isDark();if(d)document.documentElement.setAttribute('data-theme','dark');else document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('pfc-theme',d?'dark':'light');}catch(_){}var mt=document.querySelector('meta[name=theme-color]');if(mt)mt.content=d?'#0a111e':'#1c4fd8';t.setAttribute('aria-checked',d);return;}
+  if(act==='theme'){var d=!isDark();if(d)document.documentElement.setAttribute('data-theme','dark');else document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('pfc-theme',d?'dark':'light');}catch(_){}var mt=document.querySelector('meta[name=theme-color]');if(mt)mt.content=d?'#0a111e':'#1c4fd8';t.setAttribute('aria-checked',d);var l=t.querySelector('.swl');if(l)l.textContent=d?'Sombre':'Clair';return;}
   if(act==='copy'){copyText(t.dataset.v);return;}
   if(act==='open'){
     openSet.add(id);render();
@@ -793,4 +794,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build theme -->
+<!-- build label -->
