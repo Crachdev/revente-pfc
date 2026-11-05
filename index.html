@@ -65,8 +65,8 @@ a{color:var(--accent)}
 .tag.accent{background:var(--accent-soft);color:var(--accent)}
 .tag.neutral{background:var(--surface-2);color:var(--muted)}
 .fixtures{display:flex;flex-direction:column;gap:10px}
-details.fx{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-details.fx>summary{list-style:none;display:grid;grid-template-columns:64px minmax(0,1fr) auto 30px;cursor:pointer;align-items:stretch}
+details.fx,div.fx{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+details.fx>summary,div.fx>.sum{list-style:none;display:grid;grid-template-columns:64px minmax(0,1fr) auto 30px;cursor:pointer;align-items:stretch}
 details.fx>summary::-webkit-details-marker{display:none}
 .stub{border-right:2px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 0;font-family:var(--f-display)}
 .stub b{font-size:32px;line-height:1;font-weight:700}
@@ -114,7 +114,7 @@ details.set[open]>summary{margin-bottom:12px}
   h1{font-size:30px}
   .todo-item{grid-template-columns:1fr;gap:4px}
   .tiers b{font-size:18px}
-  details.fx>summary{grid-template-columns:56px minmax(0,1fr) auto 24px}
+  details.fx>summary,div.fx>.sum{grid-template-columns:56px minmax(0,1fr) auto 24px}
 }
 </style>
 <style>
@@ -147,7 +147,12 @@ tr.tot th,tr.tot td{font-weight:700;border-top:2px solid var(--line)}
 .fld select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:16px var(--f-body)}
 .fld input[type=date]{min-width:0}
 @media (max-width:420px){.kpis .big{font-size:22px}}
-details.fx.past{opacity:.6}
+details.fx.past,div.fx.past{opacity:.6}
+div.fx>.sum{cursor:default}
+.fx .lock{align-self:center;justify-self:center;color:var(--muted);display:flex}
+.lockic{display:inline-flex;vertical-align:-3px;margin-right:4px;color:inherit}
+.lockic svg{width:14px;height:14px}
+.vlocked input:disabled,.vlocked select:disabled,.fx input:disabled{opacity:.7;cursor:not-allowed}
 details.fx.past[open]{opacity:1}
 .pill.s-pretee{background:var(--accent-soft);color:var(--accent)}
 .pill.s-nonvendue{background:var(--crit-soft);color:var(--crit)}
@@ -270,17 +275,24 @@ function buildTodo(rows){
   return items.slice(0,6);
 }
 
+/* ---------- verrous ---------- */
+var LOCK_SVG='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+function saleOf(m){return ventes.filter(function(v){return v.matchId===m.id||v.date===m.date;})[0];}
+function lockFull(m){return !!(m.date&&m.date<parisToday()&&m.status==='vendue'&&saleOf(m));}
+function lockFin(m){var s=saleOf(m);return !lockFull(m)&&!!(s&&s.source==='billetterie');}
+function lockedVente(v,ff){if(v.source!=='billetterie')return false;if(ff==='seller')return v.sellerSrc==='billetterie';return ff==='date'||ff==='price'||ff==='fee'||ff==='label';}
 /* ---------- vues ---------- */
 function card(r){
   var m=r.m,J=r.J,p=r.p,id=esc(m.id),st=stubParts(m),listed=num(m.listed);
   var isPast=J<0;
+  var lockF=lockFull(m),lockN=lockFin(m);
   var px='—',cap='prix à définir';
   if(m.status==='vendue'){px='Vendue';cap=listed!=null?eur(listed):'';}
   else if(m.status==='gardee'){px='Gardée';cap='';}
   else if(m.status==='enligne'&&listed!=null){px=eur(listed);cap='affiché';}
   else if(p){px=eur(p.now);cap='conseillé';}
   if(isPast){
-    var sv=ventes.filter(function(v){return v.matchId===m.id||v.date===m.date;})[0];
+    var sv=saleOf(m);
     if(m.status==='vendue'){px=sv?eur(netOf(sv)):'Vendue';cap=sv?'net perçu':'';}
     else if(m.status==='pretee'){px='Prêtée';cap='';}
     else if(m.status==='nonvendue'){px='Non vendue';cap='vente non aboutie';}
@@ -304,19 +316,28 @@ function card(r){
   if(m.status==='enligne') acts+='<button type="button" class="btn ghost small" data-act="sold" data-id="'+id+'">Marquer vendue</button>';
   function fld(label,field,val,extra){
     var fid='f-'+field+'-'+id;
-    return '<div class="fld"><label for="'+fid+'">'+label+'</label><input id="'+fid+'" type="'+(field==='openedOn'?'date':'number')+'" '+(field==='openedOn'?'':'inputmode="decimal" step="0.5" min="0" ')+'data-field="'+field+'" data-id="'+id+'" value="'+esc(val==null?'':val)+'">'+(extra?'<small>'+extra+'</small>':'')+'</div>';
+    var dis=(lockN&&(field==='paid'||field==='floor'||field==='listed'))?' disabled':'';
+    return '<div class="fld"><label for="'+fid+'">'+label+'</label><input id="'+fid+'"'+dis+' type="'+(field==='openedOn'?'date':'number')+'" '+(field==='openedOn'?'':'inputmode="decimal" step="0.5" min="0" ')+'data-field="'+field+'" data-id="'+id+'" value="'+esc(val==null?'':val)+'">'+(extra?'<small>'+extra+'</small>':'')+'</div>';
   }
   var info=[];
   if((m.status==='enligne'||m.status==='vendue')&&m.postedBy)info.push('Mise en vente par '+esc(m.postedBy));
   if(m.updatedBy&&m.updatedAt){var a=ago(m.updatedAt);if(a)info.push('Dernière modification : '+esc(m.updatedBy)+', '+a);}
+  if(lockF){
+    return '<div class="fx past locked" id="fx-'+id+'" aria-label="Match verrouillé : vendu, informations enregistrées">'+
+      '<div class="sum"><span class="stub"><b>'+st.day+'</b><i>'+esc(st.mon)+'</i></span>'+
+      '<span class="main"><span class="opp">'+esc(m.opp)+'</span><span class="meta">'+esc(whenLabel(m))+' · <span class="j">'+jLabel(J)+'</span></span></span>'+
+      '<span class="side"><span class="pill s-'+esc(m.status)+'">'+esc(STATUS_LABEL[m.status]||m.status)+'</span><span class="px">'+esc(px)+'</span>'+(cap?'<span class="cap">'+esc(cap)+'</span>':'')+'</span>'+
+      '<span class="lock" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span></div></div>';
+  }
   return '<details class="fx'+(isPast?' past':'')+'" id="fx-'+id+'" data-key="'+id+'"'+(openSet.has(m.id)?' open':'')+'>'+
     '<summary><span class="stub"><b>'+st.day+'</b><i>'+esc(st.mon)+'</i></span>'+
     '<span class="main"><span class="opp">'+esc(m.opp)+'</span><span class="meta">'+esc(whenLabel(m))+' · <span class="j">'+jLabel(J)+'</span></span></span>'+
-    '<span class="side"><span class="pill s-'+esc(m.status)+'">'+esc(STATUS_LABEL[m.status]||m.status)+'</span><span class="px">'+esc(px)+'</span>'+(cap?'<span class="cap">'+esc(cap)+'</span>':'')+'</span>'+
+    '<span class="side"><span class="pill s-'+esc(m.status)+'">'+(lockN?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span>':'')+esc(STATUS_LABEL[m.status]||m.status)+'</span><span class="px">'+esc(px)+'</span>'+(cap?'<span class="cap">'+esc(cap)+'</span>':'')+'</span>'+
     '<span class="chev" aria-hidden="true"></span></summary>'+
     '<div class="body"><div class="seg" role="group" aria-label="Statut de la revente pour '+esc(m.opp)+'">'+seg+'</div>'+planHtml+
-    (acts?'<div class="acts">'+acts+'</div>':'')+
+    (acts&&!lockN?'<div class="acts">'+acts+'</div>':'')+
     '<div class="grid">'+fld('Prix payé (€)','paid',m.paid)+fld('Plancher (€)','floor',m.floor,'Vide : plancher de la grille')+fld('Prix affiché (€)','listed',listed)+fld('Revente vue ouverte le','openedOn',m.openedOn||'','Sert à apprendre le moment d’ouverture')+'</div>'+
+    (lockN?'<p class="note">Verrouillé : le prix de cette vente a été récupéré depuis la billetterie.</p>':'')+
     (info.length?'<p class="note">'+info.join(' · ')+'</p>':'')+
     '</div></details>';
 }
@@ -526,15 +547,16 @@ function financeView(){
   h+=sumTable('Par saison',groupBy(list,seasonOf),'Saison')+sumTable('Par année fiscale',groupBy(list,fiscalOf),'Année');
   if(list.length){
     h+='<section class="panel" aria-labelledby="h-det"><h2 id="h-det">Détail des ventes</h2><div class="vlist">'+list.map(function(v){
-      function f(label,field,val,type){return '<div class="fld"><label for="vf-'+field+'-'+esc(v.id)+'">'+label+'</label><input id="vf-'+field+'-'+esc(v.id)+'" type="'+type+'" '+(type==='number'?'inputmode="decimal" step="0.01" min="0" ':'')+'data-vf="'+field+'" data-vid="'+esc(v.id)+'" value="'+esc(val==null?'':val)+'"></div>';}
-      return '<div class="vrow"><div class="vhead"><b>'+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOf(v.date))+' · net '+eur(netOf(v))+'</span>'+
+      function f(label,field,val,type){return '<div class="fld"><label for="vf-'+field+'-'+esc(v.id)+'">'+label+'</label><input id="vf-'+field+'-'+esc(v.id)+'"'+(lockedVente(v,field)?' disabled':'')+' type="'+type+'" '+(type==='number'?'inputmode="decimal" step="0.01" min="0" ':'')+'data-vf="'+field+'" data-vid="'+esc(v.id)+'" value="'+esc(val==null?'':val)+'"></div>';}
+      var vl=v.source==='billetterie';
+      return '<div class="vrow'+(vl?' vlocked':'')+'"><div class="vhead"><b>'+(vl?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> ':'')+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOf(v.date))+' · net '+eur(netOf(v))+'</span>'+
         '<span class="src '+(v.source==='billetterie'?'bil':'man')+'">'+esc(srcLabel(v))+'</span>'+
         '<span class="muted">Vendu par (a reçu le virement) : <b>'+esc(sellerLabel(v))+'</b></span>'+
         '<span class="src '+(v.reglement==='attente'?'man':'bil')+'">'+(v.reglement==='attente'?'Règlement du club en attente':'Règlement versé')+'</span></div>'+
         '<div class="grid">'+f('Date','date',v.date,'date')+f('Prix (€)','price',v.price,'number')+f('Commission (€)','fee',v.fee,'number')+f('Libellé','label',v.label,'text')+
-          '<div class="fld"><label for="vf-seller-'+esc(v.id)+'">Vendu par</label><select id="vf-seller-'+esc(v.id)+'" data-vf="seller" data-vid="'+esc(v.id)+'">'+selOpts(v.seller,true)+'</select></div>'+
+          '<div class="fld"><label for="vf-seller-'+esc(v.id)+'">Vendu par</label><select id="vf-seller-'+esc(v.id)+'"'+(lockedVente(v,'seller')?' disabled':'')+' data-vf="seller" data-vid="'+esc(v.id)+'">'+selOpts(v.seller,true)+'</select></div>'+
           '<div class="fld"><label for="vf-reglement-'+esc(v.id)+'">Règlement du club</label><select id="vf-reglement-'+esc(v.id)+'" data-vf="reglement" data-vid="'+esc(v.id)+'"><option value="verse"'+(v.reglement!=='attente'?' selected':'')+'>Versé</option><option value="attente"'+(v.reglement==='attente'?' selected':'')+'>En attente</option></select></div></div>'+
-        '<button type="button" class="btn ghost small" data-act="delvente" data-id="'+esc(v.id)+'">Supprimer cette vente</button></div>';
+        (vl?'<p class="note">Verrouillé : montants et vendeur récupérés depuis la billetterie. Seul le statut du règlement reste modifiable.</p>':'<button type="button" class="btn ghost small" data-act="delvente" data-id="'+esc(v.id)+'">Supprimer cette vente</button>')+'</div>';
     }).join('')+'</div></section>';
   }
   return h;
@@ -785,8 +807,9 @@ app.addEventListener('click',async function(e){
   if(!db||state!=='ok')return;
   if(act==='check'){patchCfg({lastCheck:new Date().toISOString(),lastCheckBy:who});toast('Vérification notée.');return;}
   if(act==='import'){var ta=document.getElementById('imp-text');importVentes(ta?ta.value:'');return;}
-  if(act==='delvente'){deleteVente(id);return;}
+  if(act==='delvente'){var dv=ventes.filter(function(x){return x.id===id;})[0];if(dv&&dv.source==='billetterie'){toast('Vente verrouillée : données récupérées depuis la billetterie.');return;}deleteVente(id);return;}
   var m=find(id);if(!m)return;
+  if(lockFull(m)||(lockFin(m)&&(act==='posted'||act==='sold'))){toast('Fiche verrouillée.');return;}
   if(act==='status'){
     var v=t.dataset.v,patch={status:v},prev=m.status;
     if(m.status==='attente'&&(v==='ouverte'||v==='enligne')&&!m.openedOn)patch.openedOn=parisToday();
@@ -808,12 +831,14 @@ app.addEventListener('change',function(e){
   if(t.dataset.vf){
     var vv=ventes.filter(function(x){return x.id===t.dataset.vid;})[0];if(!vv)return;
     var nv=Object.assign({},vv),ff=t.dataset.vf;
+    if(lockedVente(vv,ff)){toast('Verrouillé : données récupérées depuis la billetterie.');render();return;}
     if(ff==='price'||ff==='fee')nv[ff]=num(t.value)||0;else if(ff==='date'){if(!t.value)return;nv[ff]=t.value;}else nv[ff]=t.value;
     if(ff==='seller'){nv.sellerSrc='manuel';nv.sellerBy=who;}
     if(nv.source==='billetterie'&&(ff==='price'||ff==='fee'||ff==='date'))nv.edited=who;
     saveVente(nv);return;
   }
   if(t.dataset.field){
+    var lm=find(t.dataset.id);if(lm&&(lockFull(lm)||(lockFin(lm)&&(t.dataset.field==='paid'||t.dataset.field==='floor'||t.dataset.field==='listed')))){toast('Fiche verrouillée.');render();return;}
     var f=t.dataset.field,v=(f==='openedOn')?(t.value||null):num(t.value),patch={};patch[f]=v;
     patchMatch(t.dataset.id,patch);
   }else if(t.dataset.cfg){
@@ -902,4 +927,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build name -->
+<!-- build lock -->
