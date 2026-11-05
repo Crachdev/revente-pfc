@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#1c4fd8">
+<title>Revente Jean-Bouin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Concept: feuille de match en une colonne. Un bouton d'action en haut, la liste des actions du jour, puis un billet par match (talon pointillé à gauche, prix à droite). */
+:root{
+  --bg:#f2f5f9; --surface:#ffffff; --surface-2:#e8edf4; --ink:#0d1a2d; --muted:#556579; --line:#d3dbe7;
+  --accent:#1c4fd8; --accent-ink:#ffffff; --accent-soft:#e2eafc;
+  --good:#17784a; --good-soft:#dff2e8; --warn:#8f5400; --warn-soft:#fcefd0; --crit:#b3261e; --crit-soft:#fbe3e0;
+  --f-display:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --f-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a111e; --surface:#121b2c; --surface-2:#1a2538; --ink:#e6edf8; --muted:#93a4bb; --line:#26334a;
+    --accent:#7aa0ff; --accent-ink:#0a111e; --accent-soft:#1a2a4d;
+    --good:#5fd09a; --good-soft:#12301f; --warn:#f0b95a; --warn-soft:#35280e; --crit:#ff8d85; --crit-soft:#3a1714;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a111e; --surface:#121b2c; --surface-2:#1a2538; --ink:#e6edf8; --muted:#93a4bb; --line:#26334a;
+  --accent:#7aa0ff; --accent-ink:#0a111e; --accent-soft:#1a2a4d;
+  --good:#5fd09a; --good-soft:#12301f; --warn:#f0b95a; --warn-soft:#35280e; --crit:#ff8d85; --crit-soft:#3a1714;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body);-webkit-text-size-adjust:100%}
+.wrap{max-width:720px;margin:0 auto;padding-block:20px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
+h1,h2,.h2{font-family:var(--f-display);margin:0;text-wrap:balance;text-transform:uppercase}
+h1{font-size:36px;line-height:1;font-weight:700;letter-spacing:.01em}
+h2,.h2{font-size:22px;line-height:1.1;font-weight:600;letter-spacing:.03em}
+p{margin:0}
+.sub{color:var(--muted);margin-top:6px}
+.muted{color:var(--muted)}
+a{color:var(--accent)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel>.sub{margin-top:0}
+.btn{display:flex;align-items:center;justify-content:center;min-height:52px;padding:0 18px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 16px/1.2 var(--f-body);text-decoration:none;cursor:pointer;text-align:center}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line);min-height:44px;font-size:15px}
+.btn.small{min-height:38px;padding:0 12px;font-size:14px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.cta-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.links{font-size:14px;color:var(--muted)}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.todo-item{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start;width:100%;padding:12px 0;border:0;border-top:1px solid var(--line);background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.list li:first-child .todo-item{border-top:0;padding-top:4px}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;text-align:center;justify-self:start}
+.tag.crit{background:var(--crit-soft);color:var(--crit)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.accent{background:var(--accent-soft);color:var(--accent)}
+.tag.neutral{background:var(--surface-2);color:var(--muted)}
+.fixtures{display:flex;flex-direction:column;gap:10px}
+details.fx{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+details.fx>summary{list-style:none;display:grid;grid-template-columns:64px minmax(0,1fr) auto 30px;cursor:pointer;align-items:stretch}
+details.fx>summary::-webkit-details-marker{display:none}
+.stub{border-right:2px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 0;font-family:var(--f-display)}
+.stub b{font-size:32px;line-height:1;font-weight:700}
+.stub i{font-style:normal;text-transform:uppercase;font-size:13px;letter-spacing:.08em;color:var(--muted)}
+.main{padding:12px;min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center}
+.opp{font-family:var(--f-display);font-size:24px;line-height:1.05;font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+.meta{font-size:13px;color:var(--muted)}
+.j{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.side{padding:12px 0 12px 4px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:3px;text-align:right}
+.px{font-family:var(--f-display);font-size:26px;line-height:1;font-weight:600;font-variant-numeric:tabular-nums}
+.cap{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.chev{align-self:center;justify-self:center;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);margin-top:-3px}
+details[open]>summary .chev{transform:rotate(225deg);margin-top:3px}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.pill.s-ouverte{background:var(--accent);color:var(--accent-ink)}
+.pill.s-enligne{background:var(--warn-soft);color:var(--warn)}
+.pill.s-vendue{background:var(--good-soft);color:var(--good)}
+.body{padding:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:16px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg-b{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:500 14px var(--f-body);cursor:pointer}
+.seg-b[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.plan{display:flex;flex-direction:column;gap:10px;background:var(--surface-2);border-radius:10px;padding:12px}
+.now{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.big{font-family:var(--f-display);font-size:38px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums}
+.tiers{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.tiers li{padding:8px 4px;border:1px solid var(--line);border-radius:8px;text-align:center;background:var(--surface)}
+.tiers li.cur{border-color:var(--accent);background:var(--accent-soft)}
+.tiers span{display:block;font-size:12px;color:var(--muted)}
+.tiers b{display:block;font-family:var(--f-display);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label{font-size:13px;color:var(--muted)}
+.fld small{font-size:12px;color:var(--muted)}
+.fld input{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:16px var(--f-body);font-variant-numeric:tabular-nums}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+details.set>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+details.set>summary::-webkit-details-marker{display:none}
+details.set[open]>summary{margin-bottom:12px}
+.stat{display:flex;flex-direction:column;gap:6px}
+.stat ul{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
+.note{font-size:13px;color:var(--muted)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 32px);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;font-size:14px;z-index:20}
+#toast[hidden]{display:none}
+@media (max-width:420px){
+  h1{font-size:30px}
+  .todo-item{grid-template-columns:1fr;gap:4px}
+  .tiers b{font-size:18px}
+  details.fx>summary{grid-template-columns:56px minmax(0,1fr) auto 24px}
+}
+</style>
+<style>
+header{display:block}
+.msg-err{color:var(--crit);font-weight:600}
+button.link{background:none;border:0;padding:0;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer}
+form.panel .btn{width:100%}
+.fld input[type=text],.fld input[type=password]{min-height:48px}
+</style>
+</head>
+<body>
+<div id="app" class="wrap" aria-live="polite"></div>
+<div id="toast" role="status" hidden></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+'use strict';
+var CFGX=window.PFC_CONFIG||{};
+var URL_OPEN='https://billetterie.parisfc.fr/fr/calendrier?filters%5Bstate%5D%5B%5D=choice_secondary_market';
+var URL_ALL='https://billetterie.parisfc.fr/fr/calendrier';
+var URL_PLAT='https://secondechance.parisfc.fr';
+var DEF={basePrice:null,markup:0,drop7:10,drop3:20,floorPct:50,watchFrom:21,lastCheck:null,lastCheckBy:null};
+var STATUS=[['attente','Pas encore ouverte'],['ouverte','Ouverte, à poster'],['enligne','En vente'],['vendue','Vendue'],['gardee','Je garde']];
+var STATUS_LABEL={};STATUS.forEach(function(s){STATUS_LABEL[s[0]]=s[1];});
+
+var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set();
+var state='boot', loginErr='', errMsg='', who=readWho();
+var toastTimer=null, pending=false, pollTimer=null, debounce=null;
+var app=document.getElementById('app');
+
+/* ---------- utilitaires ---------- */
+function readWho(){try{return localStorage.getItem('pfc_who')||null;}catch(e){return null;}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function num(v){if(v===null||v===undefined||v==='')return null;var n=Number(String(v).replace(',','.'));return isFinite(n)?n:null;}
+function N(v){return Number(v)||0;}
+function nz(v,d){var n=num(v);return n==null?d:n;}
+function eur(n){if(n==null)return '—';return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:Number.isInteger(n)?0:2,maximumFractionDigits:2}).format(n);}
+function parseD(s){var p=String(s).split('-').map(Number);return Date.UTC(p[0],p[1]-1,p[2]);}
+function daysBetween(a,b){return Math.round((parseD(b)-parseD(a))/86400000);}
+function parisToday(){
+  var parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  function g(t){return parts.filter(function(x){return x.type===t;})[0].value;}
+  return g('year')+'-'+g('month')+'-'+g('day');
+}
+function monShort(d){return new Intl.DateTimeFormat('fr-FR',{month:'short',timeZone:'UTC'}).format(d).replace('.','');}
+function stubParts(m){var d=new Date(parseD(m.date));return {day:d.getUTCDate(),mon:monShort(d)};}
+function whenLabel(m){
+  var d=new Date(parseD(m.date));
+  if(m.weekend){return 'Week-end du '+d.getUTCDate()+' '+monShort(d)+' · horaire à venir';}
+  var wd=new Intl.DateTimeFormat('fr-FR',{weekday:'long',timeZone:'UTC'}).format(d);
+  return wd+(m.time?' '+String(m.time).replace(':','h'):'');
+}
+function jLabel(J){return J===0?'Jour J':'J-'+J;}
+function ago(iso){
+  var t=new Date(iso).getTime();if(isNaN(t))return '';
+  var s=Math.max(0,Math.round((Date.now()-t)/1000));
+  if(s<90)return 'à l’instant';
+  var m=Math.round(s/60);if(m<60)return 'il y a '+m+' min';
+  var h=Math.round(m/60);if(h<24)return 'il y a '+h+' h';
+  return 'il y a '+Math.round(h/24)+' j';
+}
+function find(id){return matches.filter(function(x){return x.id===id;})[0];}
+
+/* ---------- grille de prix : ouverture, puis J-7, J-3, J-1 (plancher) ---------- */
+function plan(m,J){
+  var base=num(m.paid); if(base==null) base=num(cfg.basePrice);
+  if(base==null) return null;
+  var floorV=num(m.floor); if(floorV==null) floorV=Math.round(base*N(cfg.floorPct)/100);
+  var openP=Math.round(base*(1+N(cfg.markup)/100));
+  function at(j){
+    var p;
+    if(j<=1)p=floorV; else if(j<=3)p=openP*(1-N(cfg.drop3)/100); else if(j<=7)p=openP*(1-N(cfg.drop7)/100); else p=openP;
+    return Math.max(floorV,Math.round(p));
+  }
+  var next=null,steps=[7,3,1];
+  for(var i=0;i<steps.length;i++){if(steps[i]<J){next={t:steps[i],inDays:J-steps[i],price:at(steps[i])};break;}}
+  return {now:at(J),next:next,tiers:[
+    {k:'Ouverture',cur:J>7,price:at(99)},{k:'J-7',cur:J<=7&&J>3,price:at(7)},
+    {k:'J-3',cur:J<=3&&J>1,price:at(3)},{k:'J-1',cur:J<=1,price:at(1)}]};
+}
+
+function buildTodo(rows){
+  var items=[];
+  rows.forEach(function(r){
+    var m=r.m,J=r.J,p=r.p;
+    if(m.status==='vendue'||m.status==='gardee')return;
+    if(m.status==='ouverte'){
+      items.push({pr:0,tag:'À poster',cls:'crit',id:m.id,J:J,text:m.opp+' : la revente est ouverte. '+(p?'Mets la paire en vente à '+eur(p.now)+'.':'Renseigne un prix de base pour voir le prix conseillé.')});
+    }else if(m.status==='enligne'){
+      var L=num(m.listed);
+      if(p&&L!=null&&p.now<L)items.push({pr:1,tag:'Baisser',cls:'warn',id:m.id,J:J,text:m.opp+' : passe de '+eur(L)+' à '+eur(p.now)+' ('+jLabel(J)+').'});
+      else if(p&&L==null)items.push({pr:3,tag:'Noter',cls:'neutral',id:m.id,J:J,text:m.opp+' : note le prix affiché pour suivre les baisses.'});
+    }else if(m.status==='attente'&&J<=N(cfg.watchFrom)){
+      items.push({pr:2,tag:'Surveiller',cls:'accent',id:m.id,J:J,text:m.opp+' : revente pas encore vue ('+jLabel(J)+').'});
+    }
+  });
+  items.sort(function(a,b){return a.pr-b.pr||a.J-b.J;});
+  return items.slice(0,6);
+}
+
+/* ---------- vues ---------- */
+function card(r){
+  var m=r.m,J=r.J,p=r.p,id=esc(m.id),st=stubParts(m),listed=num(m.listed);
+  var px='—',cap='prix à définir';
+  if(m.status==='vendue'){px='Vendue';cap=listed!=null?eur(listed):'';}
+  else if(m.status==='gardee'){px='Gardée';cap='';}
+  else if(m.status==='enligne'&&listed!=null){px=eur(listed);cap='affiché';}
+  else if(p){px=eur(p.now);cap='conseillé';}
+  var seg=STATUS.map(function(s){return '<button type="button" class="seg-b" data-act="status" data-id="'+id+'" data-v="'+s[0]+'" aria-pressed="'+(m.status===s[0])+'">'+s[1]+'</button>';}).join('');
+  var planHtml='';
+  if(p){
+    var nextTxt=p.next?((p.next.inDays===1?'Demain':'Dans '+p.next.inDays+' jours')+' (J-'+p.next.t+') : '+eur(p.next.price)+'.'):'Dernier palier atteint : prix plancher.';
+    planHtml='<div class="plan"><div class="now"><div><span class="cap">Prix conseillé aujourd’hui</span><div class="big">'+eur(p.now)+'</div></div>'+
+      '<button type="button" class="btn ghost small" data-act="copy" data-v="'+p.now+'">Copier le prix</button></div>'+
+      '<ul class="tiers">'+p.tiers.map(function(t){return '<li class="'+(t.cur?'cur':'')+'"><span>'+t.k+'</span><b>'+eur(t.price)+'</b></li>';}).join('')+'</ul>'+
+      '<p class="note">Prochaine baisse : '+nextTxt+'</p></div>';
+  }else{
+    planHtml='<div class="plan"><p class="note">Renseigne le prix payé ci-dessous, ou un prix de base dans « Grille de prix », pour voir les prix conseillés.</p></div>';
+  }
+  var acts='';
+  if(p&&(m.status==='attente'||m.status==='ouverte')) acts+='<button type="button" class="btn small" data-act="posted" data-id="'+id+'" data-v="'+p.now+'">Posté à '+eur(p.now)+'</button>';
+  if(p&&m.status==='enligne'&&listed!==p.now) acts+='<button type="button" class="btn small" data-act="posted" data-id="'+id+'" data-v="'+p.now+'">Baissé à '+eur(p.now)+'</button>';
+  if(m.status==='enligne') acts+='<button type="button" class="btn ghost small" data-act="sold" data-id="'+id+'">Marquer vendue</button>';
+  function fld(label,field,val,extra){
+    var fid='f-'+field+'-'+id;
+    return '<div class="fld"><label for="'+fid+'">'+label+'</label><input id="'+fid+'" type="'+(field==='openedOn'?'date':'number')+'" '+(field==='openedOn'?'':'inputmode="decimal" step="0.5" min="0" ')+'data-field="'+field+'" data-id="'+id+'" value="'+esc(val==null?'':val)+'">'+(extra?'<small>'+extra+'</small>':'')+'</div>';
+  }
+  var info=[];
+  if((m.status==='enligne'||m.status==='vendue')&&m.postedBy)info.push('Mise en vente par '+esc(m.postedBy));
+  if(m.updatedBy&&m.updatedAt){var a=ago(m.updatedAt);if(a)info.push('Dernière modification : '+esc(m.updatedBy)+', '+a);}
+  return '<details class="fx" id="fx-'+id+'" data-key="'+id+'"'+(openSet.has(m.id)?' open':'')+'>'+
+    '<summary><span class="stub"><b>'+st.day+'</b><i>'+esc(st.mon)+'</i></span>'+
+    '<span class="main"><span class="opp">'+esc(m.opp)+'</span><span class="meta">'+esc(whenLabel(m))+' · <span class="j">'+jLabel(J)+'</span></span></span>'+
+    '<span class="side"><span class="pill s-'+esc(m.status)+'">'+esc(STATUS_LABEL[m.status]||m.status)+'</span><span class="px">'+esc(px)+'</span>'+(cap?'<span class="cap">'+esc(cap)+'</span>':'')+'</span>'+
+    '<span class="chev" aria-hidden="true"></span></summary>'+
+    '<div class="body"><div class="seg" role="group" aria-label="Statut de la revente pour '+esc(m.opp)+'">'+seg+'</div>'+planHtml+
+    (acts?'<div class="acts">'+acts+'</div>':'')+
+    '<div class="grid">'+fld('Prix payé (€)','paid',m.paid)+fld('Plancher (€)','floor',m.floor,'Vide : plancher de la grille')+fld('Prix affiché (€)','listed',listed)+fld('Revente vue ouverte le','openedOn',m.openedOn||'','Sert à apprendre le moment d’ouverture')+'</div>'+
+    (info.length?'<p class="note">'+info.join(' · ')+'</p>':'')+
+    '</div></details>';
+}
+
+function settings(){
+  function f(label,key,val,hint){
+    var fid='c-'+key;
+    return '<div class="fld"><label for="'+fid+'">'+label+'</label><input id="'+fid+'" type="number" inputmode="decimal" step="0.5" min="0" data-cfg="'+key+'" value="'+esc(val==null?'':val)+'">'+(hint?'<small>'+hint+'</small>':'')+'</div>';
+  }
+  var ex=plan({paid:30},99);
+  var exTxt=ex?ex.tiers.map(function(t){return t.k+' '+eur(t.price);}).join(' → '):'';
+  return '<details class="panel set" data-key="cfg"'+(openSet.has('cfg')?' open':'')+'><summary><span class="h2">Grille de prix</span><span class="chev" aria-hidden="true"></span></summary>'+
+    '<p class="note">Valeurs de départ à ajuster. Elles s’appliquent à tous les matchs sans prix propre, pour vous deux.</p>'+
+    '<div class="grid" style="margin-top:12px">'+
+    f('Prix de base par place (€)','basePrice',num(cfg.basePrice),'Utilisé si le prix payé est vide')+
+    f('Majoration à l’ouverture (%)','markup',cfg.markup,'0 : tu pars du prix de base')+
+    f('Baisse à J-7 (%)','drop7',cfg.drop7)+
+    f('Baisse à J-3 (%)','drop3',cfg.drop3)+
+    f('Plancher (% du prix de base)','floorPct',cfg.floorPct,'Atteint à J-1')+
+    f('Surveiller dès J-','watchFrom',cfg.watchFrom,'Jours avant le match')+
+    '</div><p class="note" style="margin-top:12px">Exemple, place à 30 € : '+esc(exTxt)+'.</p></details>';
+}
+
+function learned(){
+  var obs=matches.filter(function(m){return m.openedOn&&m.date;}).map(function(m){return {m:m,j:daysBetween(m.openedOn,m.date)};}).filter(function(o){return o.j>=0;});
+  var body;
+  if(!obs.length){
+    body='<p class="sub">Note la date où un match apparaît dans le filtre « revente ouverte ». Après deux ou trois matchs, vous saurez à partir de quel jour surveiller.</p>';
+  }else{
+    var js=obs.map(function(o){return o.j;}),sum=js.reduce(function(a,b){return a+b;},0);
+    var avg=Math.round(sum/js.length),mn=Math.min.apply(null,js),mx=Math.max.apply(null,js);
+    body='<p><strong>La revente ouvre en général à J-'+avg+'</strong>'+(js.length>1?' (de J-'+mn+' à J-'+mx+')':'')+'. '+(js.length===1?'Une seule observation, à confirmer. ':'')+'Surveillez chaque jour dès J-'+(mx+2)+'.</p>'+
+      '<ul>'+obs.map(function(o){return '<li>'+esc(o.m.opp)+' : vue ouverte à J-'+o.j+'</li>';}).join('')+'</ul>';
+  }
+  return '<section class="panel stat" aria-labelledby="h-learn"><h2 id="h-learn">Quand la revente ouvre-t-elle ?</h2>'+body+'</section>';
+}
+
+function lastCheckText(){
+  if(!cfg.lastCheck)return 'Aucune vérification notée.';
+  try{
+    return 'Dernière vérification : '+new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(cfg.lastCheck))+(cfg.lastCheckBy?' par '+cfg.lastCheckBy:'');
+  }catch(e){return '';}
+}
+
+function titleBlock(sub){return '<header><h1>Revente Jean-Bouin</h1><p class="sub">'+esc(sub)+'</p></header>';}
+
+function setupView(){
+  return titleBlock('Configuration à terminer')+'<section class="panel"><h2>Il manque la configuration</h2>'+
+    '<p>Ouvre le fichier <strong>config.js</strong> et renseigne l’adresse e-mail du compte commun. Les étapes sont dans <strong>LISEZMOI.md</strong>.</p></section>';
+}
+function loginView(){
+  return titleBlock('Abonnement Paris FC · accès partagé')+'<form class="panel" id="login-form"><h2>Mot de passe commun</h2>'+
+    '<div class="fld"><label for="pw">Mot de passe</label><input id="pw" type="password" autocomplete="current-password" required></div>'+
+    (loginErr?'<p class="msg-err" role="alert">'+esc(loginErr)+'</p>':'')+
+    '<button type="submit" class="btn">Entrer</button></form>';
+}
+function whoView(){
+  return titleBlock('Abonnement Paris FC · accès partagé')+'<form class="panel" id="who-form"><h2>Qui es-tu ?</h2>'+
+    '<p class="sub">Ton prénom s’affiche sur les modifications que tu fais, pour que l’autre sache qui a posté ou baissé le prix.</p>'+
+    '<div class="fld"><label for="who">Prénom</label><input id="who" type="text" maxlength="30" autocomplete="given-name" value="'+esc(who||'')+'" required></div>'+
+    '<button type="submit" class="btn">Continuer</button></form>';
+}
+
+function render(){
+  if(state==='setup'){app.innerHTML=setupView();return;}
+  if(state==='login'){app.innerHTML=loginView();var pw=document.getElementById('pw');if(pw)pw.focus();return;}
+  if(state==='who'){app.innerHTML=whoView();var wh=document.getElementById('who');if(wh)wh.focus();return;}
+  var today=parisToday();
+  var rows=matches.filter(function(m){return m&&m.date;}).map(function(m){return {m:m,J:daysBetween(today,m.date)};}).filter(function(r){return r.J>=0;});
+  rows.forEach(function(r){r.p=plan(r.m,r.J);});
+  var h=titleBlock(state==='ok'?rows.length+' matchs à domicile à venir · abonnement Paris FC':'Abonnement Paris FC');
+  h+='<section class="panel" aria-labelledby="h-cta"><h2 id="h-cta">Revente ouverte quelque part ?</h2>'+
+    '<p class="sub">Le filtre du site liste seulement les matchs dont la revente est ouverte.</p>'+
+    '<a class="btn" href="'+URL_OPEN+'" target="_blank" rel="noopener">Voir les matchs à revente ouverte</a>'+
+    '<div class="cta-row"><button type="button" class="btn ghost" data-act="check"'+(state==='ok'?'':' disabled')+'>J’ai vérifié</button><span class="muted">'+esc(lastCheckText())+'</span></div>'+
+    '<p class="links"><a href="'+URL_ALL+'" target="_blank" rel="noopener">Calendrier complet</a> · <a href="'+URL_PLAT+'" target="_blank" rel="noopener">Plateforme de revente du club</a></p></section>';
+  if(state==='loading'){
+    h+='<p class="panel sub">Chargement des matchs…</p>';
+  }else if(state==='error'){
+    h+='<section class="panel"><h2>Données injoignables</h2><p>'+esc(errMsg||'Impossible de lire les données.')+'</p><button type="button" class="btn ghost" data-act="retry">Réessayer</button></section>';
+  }else if(state==='ok'){
+    var todo=buildTodo(rows);
+    h+='<section class="panel" aria-labelledby="h-todo"><h2 id="h-todo">À faire maintenant</h2>';
+    if(todo.length){
+      h+='<ul class="list">'+todo.map(function(t){return '<li><button type="button" class="todo-item" data-act="open" data-id="'+esc(t.id)+'"><span class="tag '+t.cls+'">'+t.tag+'</span><span>'+esc(t.text)+'</span></button></li>';}).join('')+'</ul>';
+    }else{
+      h+='<p class="sub">Rien d’urgent. Les actions apparaissent ici dès qu’une revente s’ouvre ou qu’un prix doit baisser.</p>';
+    }
+    h+='</section>';
+    h+='<section aria-labelledby="h-fx"><h2 id="h-fx" style="margin-bottom:10px">Matchs à domicile</h2><div class="fixtures">'+
+      (rows.length?rows.map(card).join(''):'<p class="panel sub">Aucun match enregistré.</p>')+'</div></section>';
+    h+=learned();
+    h+=settings();
+    h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';
+  }
+  h+='<p class="note">Connecté en tant que <strong>'+esc(who||'?')+'</strong> · <button type="button" class="link" data-act="rename">changer de prénom</button> · <button type="button" class="link" data-act="logout">se déconnecter</button></p>';
+  app.innerHTML=h;
+}
+
+function toast(msg){
+  var t=document.getElementById('toast');t.textContent=msg;t.hidden=false;
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.hidden=true;},3500);
+}
+function copyText(v){
+  try{navigator.clipboard.writeText(String(v)).then(function(){toast('Prix copié : '+v+' €');},function(){toast('Copie impossible. Prix : '+v+' €');});}
+  catch(e){toast('Copie impossible. Prix : '+v+' €');}
+}
+
+/* ---------- données (Firestore) ---------- */
+var SEED=[['m01','Angers','2026-11-22','15:00',false],['m02','Le Mans','2026-12-05','20:45',false],['m03','Le Havre','2027-01-02','21:00',false],
+['m04','Toulouse','2027-01-17','15:00',false],['m05','Auxerre','2027-01-30','20:45',false],['m06','Troyes','2027-02-13',null,true],
+['m07','Brest','2027-03-06',null,true],['m08','Lorient','2027-03-13',null,true],['m09','PSG','2027-04-03',null,true],
+['m10','Lens','2027-04-24',null,true],['m11','Lille','2027-05-08',null,true],['m12','Marseille','2027-05-22',null,true]];
+function mref(){return db.collection('revente_matches');}
+function cref(){return db.collection('revente_config').doc('main');}
+function isAuthError(e){return !!e&&(e.code==='permission-denied'||e.code==='unauthenticated');}
+async function seedIfEmpty(){
+  var s=await mref().limit(1).get();
+  if(!s.empty)return;
+  var b=db.batch();
+  SEED.forEach(function(m,i){b.set(mref().doc(m[0]),{order:i+1,opp:m[1],date:m[2],time:m[3],weekend:m[4],status:'attente',paid:null,floor:null,listed:null,openedOn:null,postedBy:null,updatedBy:null,updatedAt:null});});
+  await b.commit();
+}
+async function reload(){
+  var a=await mref().orderBy('order').get();
+  var c=await cref().get();
+  matches=a.docs.map(function(d){var r=d.data();r.id=d.id;r.paid=num(r.paid);r.floor=num(r.floor);r.listed=num(r.listed);return r;});
+  cfg=Object.assign({},DEF,c.exists?c.data():{});
+}
+function isTyping(){var a=document.activeElement;return !!(a&&a.tagName==='INPUT'&&app.contains(a));}
+async function refresh(){
+  if(state!=='ok')return;
+  if(isTyping()){pending=true;return;}
+  try{await reload();render();}
+  catch(e){if(isAuthError(e)){await logout();}}
+}
+function startSync(){
+  stopSync();
+  unsubs=[mref().onSnapshot(onRemote,function(){}),cref().onSnapshot(onRemote,function(){})];
+  pollTimer=setInterval(refresh,45000);
+}
+function stopSync(){
+  clearInterval(pollTimer);pollTimer=null;
+  unsubs.forEach(function(u){try{u();}catch(e){}});unsubs=[];
+}
+function onRemote(){clearTimeout(debounce);debounce=setTimeout(refresh,400);}
+
+async function startApp(){
+  state='loading';render();
+  try{await seedIfEmpty();await reload();state='ok';render();startSync();}
+  catch(e){
+    if(isAuthError(e)){
+      state='error';
+      errMsg='Accès refusé par Firestore : les règles de sécurité ne sont pas encore à jour (voir LISEZMOI.md, étape 3), ou le compte commun n’existe pas.';
+      render();return;
+    }
+    state='error';errMsg='Détail : '+((e&&e.message)||'erreur inconnue');render();
+  }
+}
+async function afterLogin(){
+  if(!who){state='who';render();return;}
+  await startApp();
+}
+async function logout(){
+  stopSync();
+  try{await auth.signOut();}catch(e){}
+  matches=[];state='login';render();
+}
+
+function stamp(p){p.updatedBy=who;p.updatedAt=new Date().toISOString();return p;}
+async function patchMatch(id,patch){
+  stamp(patch);
+  var m=find(id);if(m)Object.assign(m,patch);
+  render();
+  try{await mref().doc(id).update(patch);}
+  catch(e){
+    if(isAuthError(e)){await logout();return;}
+    toast('Enregistrement impossible : '+(e.message||e.code));
+    await refresh();
+  }
+}
+async function patchCfg(patch){
+  Object.assign(cfg,patch);render();
+  try{await cref().set(patch,{merge:true});}
+  catch(e){
+    if(isAuthError(e)){await logout();return;}
+    toast('Enregistrement impossible : '+(e.message||e.code));
+    await refresh();
+  }
+}
+
+/* ---------- événements ---------- */
+app.addEventListener('click',async function(e){
+  var t=e.target.closest('[data-act]');if(!t)return;
+  var act=t.dataset.act,id=t.dataset.id;
+  if(act==='copy'){copyText(t.dataset.v);return;}
+  if(act==='open'){
+    openSet.add(id);render();
+    var el=document.getElementById('fx-'+id);
+    if(el){var calm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;el.scrollIntoView({behavior:calm?'auto':'smooth',block:'start'});}
+    return;
+  }
+  if(act==='logout'){await logout();return;}
+  if(act==='rename'){who=null;try{localStorage.removeItem('pfc_who');}catch(x){}state='who';render();return;}
+  if(act==='retry'){await startApp();return;}
+  if(!db||state!=='ok')return;
+  if(act==='check'){patchCfg({lastCheck:new Date().toISOString(),lastCheckBy:who});toast('Vérification notée.');return;}
+  var m=find(id);if(!m)return;
+  if(act==='status'){
+    var v=t.dataset.v,patch={status:v};
+    if(m.status==='attente'&&(v==='ouverte'||v==='enligne')&&!m.openedOn)patch.openedOn=parisToday();
+    if(v==='enligne'&&m.status!=='enligne')patch.postedBy=who;
+    patchMatch(id,patch);
+  }else if(act==='posted'){
+    var p2={status:'enligne',listed:Number(t.dataset.v)};
+    if(!m.openedOn)p2.openedOn=parisToday();
+    if(m.status!=='enligne')p2.postedBy=who;
+    patchMatch(id,p2);
+  }else if(act==='sold'){
+    patchMatch(id,{status:'vendue'});
+  }
+});
+app.addEventListener('change',function(e){
+  var t=e.target;if(!db||state!=='ok')return;
+  if(t.dataset.field){
+    var f=t.dataset.field,v=(f==='openedOn')?(t.value||null):num(t.value),patch={};patch[f]=v;
+    patchMatch(t.dataset.id,patch);
+  }else if(t.dataset.cfg){
+    var c={};c[t.dataset.cfg]=num(t.value);patchCfg(c);
+  }
+});
+app.addEventListener('submit',async function(e){
+  e.preventDefault();
+  var f=e.target;
+  if(f.id==='login-form'){
+    var pw=document.getElementById('pw').value;if(!pw)return;
+    var btn=f.querySelector('button[type="submit"]');if(btn)btn.disabled=true;
+    try{await auth.signInWithEmailAndPassword(CFGX.SHARED_EMAIL,pw);}
+    catch(err){
+      loginErr=/credential|password|user-not-found|invalid/i.test(err.code||'')?'Mot de passe incorrect.':'Connexion impossible : '+(err.message||err.code);
+      render();return;
+    }
+    loginErr='';await afterLogin();
+  }else if(f.id==='who-form'){
+    var n=document.getElementById('who').value.trim();if(!n)return;
+    who=n.slice(0,30);
+    try{localStorage.setItem('pfc_who',who);}catch(x){}
+    await startApp();
+  }
+});
+app.addEventListener('toggle',function(e){
+  var k=e.target&&e.target.dataset&&e.target.dataset.key;if(!k)return;
+  if(e.target.open)openSet.add(k);else openSet.delete(k);
+},true);
+app.addEventListener('focusout',function(){if(pending){pending=false;setTimeout(refresh,200);}});
+document.addEventListener('visibilitychange',function(){if(!document.hidden)refresh();});
+
+/* ---------- démarrage ---------- */
+function configured(){
+  function ok(v){return v&&String(v).indexOf('VOTRE')<0;}
+  return !!CFGX.FIREBASE&&ok(CFGX.FIREBASE.apiKey)&&ok(CFGX.SHARED_EMAIL);
+}
+(function init(){
+  if(!configured()){state='setup';render();return;}
+  if(!window.firebase||!firebase.initializeApp){
+    state='error';errMsg='La bibliothèque Firebase ne s’est pas chargée. Vérifie ta connexion et recharge la page.';render();return;
+  }
+  if(!firebase.apps.length)firebase.initializeApp(CFGX.FIREBASE);
+  auth=firebase.auth();db=firebase.firestore();
+  var first=true;
+  auth.onAuthStateChanged(function(u){
+    if(!first)return;first=false;
+    if(u){afterLogin();}else{state='login';render();}
+  });
+})();
+})();
+</script>
+</body>
+</html>
