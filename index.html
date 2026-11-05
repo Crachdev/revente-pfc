@@ -163,7 +163,7 @@ var app=document.getElementById('app');
 
 /* ---------- utilitaires ---------- */
 function users(){return (CFGX.USERS||[]).filter(function(u){return u&&u.name&&u.email;});}
-var selUser='';
+var selUser='', pwMsg=null;
 function lastUser(){if(selUser)return selUser;try{return localStorage.getItem('pfc_last_user')||'';}catch(e){return '';}}
 function whoFromEmail(em){
   var m=users().filter(function(u){return u.email.toLowerCase()===String(em||'').toLowerCase();})[0];
@@ -365,6 +365,16 @@ function render(){
     h+=settings();
     h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';
   }
+  if(state==='ok'){
+    h+='<details class="panel set" data-key="pw"'+(openSet.has('pw')?' open':'')+'><summary><span class="h2">Mon mot de passe</span><span class="chev" aria-hidden="true"></span></summary>'+
+      '<form id="pw-form" style="display:flex;flex-direction:column;gap:12px">'+
+      '<p class="note">Change le mot de passe de ton compte ('+esc(who||'')+'). Il faut saisir l’actuel pour confirmer.</p>'+
+      '<div class="fld"><label for="pw-cur">Mot de passe actuel</label><input id="pw-cur" type="password" autocomplete="current-password" required></div>'+
+      '<div class="fld"><label for="pw-new">Nouveau mot de passe (8 caractères minimum)</label><input id="pw-new" type="password" autocomplete="new-password" minlength="8" required></div>'+
+      '<div class="fld"><label for="pw-new2">Confirmer le nouveau mot de passe</label><input id="pw-new2" type="password" autocomplete="new-password" minlength="8" required></div>'+
+      (pwMsg?'<p class="'+(pwMsg.ok?'note':'msg-err')+'" role="status">'+esc(pwMsg.t)+'</p>':'')+
+      '<button type="submit" class="btn">Changer mon mot de passe</button></form></details>';
+  }
   h+='<p class="note">Connecté en tant que <strong>'+esc(who||'?')+'</strong> · <button type="button" class="link" data-act="logout">se déconnecter</button></p>';
   app.innerHTML=h;
 }
@@ -514,6 +524,21 @@ app.addEventListener('submit',async function(e){
     who=whoFromEmail(em);
     try{localStorage.setItem('pfc_last_user',em);}catch(x){}
     loginErr='';await afterLogin();
+  }else if(f.id==='pw-form'){
+    var cur=document.getElementById('pw-cur').value,n1=document.getElementById('pw-new').value,n2=document.getElementById('pw-new2').value;
+    if(n1.length<8){pwMsg={ok:false,t:'Le nouveau mot de passe doit faire au moins 8 caractères.'};render();return;}
+    if(n1!==n2){pwMsg={ok:false,t:'Les deux nouveaux mots de passe ne sont pas identiques.'};render();return;}
+    if(n1===cur){pwMsg={ok:false,t:'Le nouveau mot de passe doit être différent de l’actuel.'};render();return;}
+    var u=auth.currentUser;
+    try{
+      await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,cur));
+      await u.updatePassword(n1);
+      pwMsg=null;openSet.delete('pw');render();toast('Mot de passe modifié.');
+    }catch(err){
+      var c=err&&err.code||'';
+      pwMsg={ok:false,t:/credential|password|invalid/i.test(c)&&!/weak/.test(c)?'Mot de passe actuel incorrect.':(/weak/.test(c)?'Mot de passe trop faible : choisis-en un plus long.':'Changement impossible : '+(err.message||c))};
+      openSet.add('pw');render();
+    }
   }
 });
 app.addEventListener('toggle',function(e){
