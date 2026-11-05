@@ -1,0 +1,24 @@
+name: Alerte quotidienne revente
+on:
+  schedule:
+    - cron: '0 10 * * *'   # 12h Paris en ete
+    - cron: '0 11 * * *'   # 12h Paris en hiver
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Envoyer maintenant (ignore l'heure)"
+        default: 'true'
+jobs:
+  alerte:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-save firebase-admin@12 nodemailer@6
+      - run: node scripts/alerte.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          FORCE: ${{ github.event.inputs.force }}
