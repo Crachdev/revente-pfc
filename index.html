@@ -505,16 +505,16 @@ function sellerLabel(v){
   return v.seller+(v.sellerSrc==='billetterie'?' · d’après le titulaire du compte bancaire sur la billetterie':(v.sellerBy?' · saisi par '+v.sellerBy:''));
 }
 function balance(){
-  var us=sellers(),enc={},tin={},tout={};
-  us.forEach(function(n){enc[n]=0;tin[n]=0;tout[n]=0;});
+  var us=sellers(),enc={},tin={},tout={},pp={};
+  us.forEach(function(n){enc[n]=0;tin[n]=0;tout[n]=0;pp[n]=0;});
   var un=0,pend=0,pendN=0;
-  ventes.forEach(function(v){if(enc[v.seller]===undefined){un++;return;}if(v.reglement==='attente'){pend+=netOf(v);pendN++;return;}enc[v.seller]+=netOf(v);});
+  ventes.forEach(function(v){if(enc[v.seller]===undefined){un++;return;}enc[v.seller]+=netOf(v);if(v.reglement==='attente'){pend+=netOf(v);pendN++;pp[v.seller]+=netOf(v);}});
   transfers.forEach(function(t){if(tout[t.from]!==undefined)tout[t.from]+=t.amount;if(tin[t.to]!==undefined)tin[t.to]+=t.amount;});
   var tot=us.reduce(function(s,n){return s+enc[n];},0),fair=us.length?tot/us.length:0;
-  return {un:un,pend:pend,pendN:pendN,tot:tot,fair:fair,rows:us.map(function(n){return {n:n,enc:enc[n],out:tout[n],inn:tin[n],bal:r2(enc[n]-tout[n]+tin[n]-fair)};})};
+  return {un:un,pend:pend,pendN:pendN,tot:tot,fair:fair,rows:us.map(function(n){return {n:n,enc:enc[n],pend:pp[n],out:tout[n],inn:tin[n],bal:r2(enc[n]-tout[n]+tin[n]-fair)};})};
 }
 function balanceView(){
-  var b=balance(),h='<section class="panel" aria-labelledby="h-bal"><h2 id="h-bal">Qui a encaissé, qui doit quoi</h2>';
+  var b=balance(),h='<section class="panel" aria-labelledby="h-bal"><h2 id="h-bal">Qui a vendu, qui doit quoi</h2>';
   var debt=b.rows.filter(function(r){return r.bal>0.005;}),cred=b.rows.filter(function(r){return r.bal<-0.005;});
   var msg;
   if(!ventes.length)msg='Aucune vente pour l’instant.';
@@ -523,10 +523,10 @@ function balanceView(){
   else msg=b.rows.map(function(r){return esc(r.n)+' : '+(r.bal>0?'doit '+eur(r.bal):r.bal<0?'doit recevoir '+eur(-r.bal):'à jour');}).join(' · ');
   h+='<p class="verdict">'+msg+'</p>';
   if(b.un)h+='<p class="note warn-n">'+b.un+' vente(s) sans vendeur renseigné : elles ne sont pas comptées ici. Choisis le vendeur dans « Détail des ventes ».</p>';
-  if(b.pendN)h+='<p class="note warn-n">'+b.pendN+' vente(s) en attente de règlement par le club ('+eur(b.pend)+') : pas encore comptée(s) dans ce qui a été encaissé.</p>';
-  h+='<div class="tbl"><table><thead><tr><th scope="col">Qui</th><th scope="col">Encaissé</th><th scope="col">Viré</th><th scope="col">Reçu</th><th scope="col">Solde</th></tr></thead><tbody>'+
-    b.rows.map(function(r){return '<tr><th scope="row">'+esc(r.n)+'</th><td>'+eur(r.enc)+'</td><td>'+eur(r.out)+'</td><td>'+eur(r.inn)+'</td><td>'+(r.bal>0.005?'doit '+eur(r.bal):r.bal<-0.005?'reçoit '+eur(-r.bal):'0 €')+'</td></tr>';}).join('')+'</tbody></table></div>';
-  h+='<p class="note">Encaissé = net des ventes dont la personne est le vendeur (c’est elle qui reçoit le virement du club). Part de chacun = total net ÷ nombre de personnes (actuellement '+eur(b.fair)+' chacun). Solde = encaissé − virements faits + virements reçus − part.</p>';
+  h+='<p class="note"><b>Total net des reventes : '+eur(b.tot)+'</b> · part de chacun : <b>'+eur(b.fair)+'</b> ('+sellers().length+' personnes).'+(b.pendN?' Dont '+eur(b.pend)+' pas encore versés par le club ('+b.pendN+' vente'+(b.pendN>1?'s':'')+') : ils sont comptés pour celui qui va les recevoir.':'')+'</p>';
+  h+='<div class="tbl"><table><thead><tr><th scope="col">Qui</th><th scope="col">Net vendu</th><th scope="col">Viré</th><th scope="col">Reçu</th><th scope="col">Solde</th></tr></thead><tbody>'+
+    b.rows.map(function(r){return '<tr><th scope="row">'+esc(r.n)+'</th><td>'+eur(r.enc)+(r.pend>0?'<br><small class="muted">dont '+eur(r.pend)+' à recevoir</small>':'')+'</td><td>'+eur(r.out)+'</td><td>'+eur(r.inn)+'</td><td>'+(r.bal>0.005?'doit '+eur(r.bal):r.bal<-0.005?'reçoit '+eur(-r.bal):'0 €')+'</td></tr>';}).join('')+'</tbody></table></div>';
+  h+='<p class="note">Net vendu = net des ventes dont la personne est le vendeur (c’est elle qui reçoit le virement du club), règlements en attente compris. Solde = net vendu − virements faits + virements reçus − part de chacun. Le solde est donc le montant à virer, qu’un règlement du club soit encore en attente ou non.</p>';
   var us=sellers();
   h+='<details class="panel set" data-key="addt"'+(openSet.has('addt')?' open':'')+'><summary><span class="h2">Enregistrer un virement entre nous</span><span class="chev" aria-hidden="true"></span></summary>'+
     '<form id="tr-form" style="display:flex;flex-direction:column;gap:12px"><div class="grid">'+
@@ -610,7 +610,7 @@ function financeView(){
   var list=sortedVentes();
   var tot=list.reduce(function(a,v){a.brut+=v.price;a.fee+=v.fee;a.net+=netOf(v);return a;},{brut:0,fee:0,net:0});
   var h='<section class="panel" aria-labelledby="h-fin"><h2 id="h-fin">Mes ventes</h2>'+
-    '<div class="kpis"><div><span class="cap">Net encaissé</span><b class="big">'+eur(tot.net)+'</b></div><div><span class="cap">Par personne</span><b class="big">'+eur(tot.net/2)+'</b></div><div><span class="cap">Ventes</span><b class="big">'+list.length+'</b></div></div>'+
+    '<div class="kpis"><div><span class="cap">Net des reventes</span><b class="big">'+eur(tot.net)+'</b></div><div><span class="cap">Par personne</span><b class="big">'+eur(tot.net/2)+'</b></div><div><span class="cap">Ventes</span><b class="big">'+list.length+'</b></div></div>'+
     '<button type="button" class="btn" data-act="export"'+(list.length?'':' disabled')+'>Exporter en Excel</button>'+
     '<p class="note">Une vente = une paire de places. Le net est le prix de vente moins la commission du club ; « par personne » est la moitié du net. Saison du 1er août au 31 juillet, année fiscale = année civile.</p></section>';
   h+=roiView();
@@ -741,16 +741,20 @@ function exportXlsx(){
     var tv={};['Date','De','Vers','Montant','Note','Saisi par'].forEach(function(h,c){tv[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
     tl.forEach(function(t,i){var r=i+1;tv[X.utils.encode_cell({r:r,c:0})]={t:'d',v:new Date(t.date+'T00:00:00Z'),z:'dd/mm/yyyy'};tv[X.utils.encode_cell({r:r,c:1})]={t:'s',v:t.from};tv[X.utils.encode_cell({r:r,c:2})]={t:'s',v:t.to};tv[X.utils.encode_cell({r:r,c:3})]={t:'n',v:t.amount,z:EUR};tv[X.utils.encode_cell({r:r,c:4})]={t:'s',v:t.note||''};tv[X.utils.encode_cell({r:r,c:5})]={t:'s',v:t.by||''};});
     tv['!ref']='A1:F'+(tn?tn+1:1);tv['!cols']=[{wch:12},{wch:12},{wch:12},{wch:13},{wch:30},{wch:12}];
-    var dc={};['Personne','Encaissé (net)','Part due','Virements faits','Virements reçus','Solde (positif = doit)'].forEach(function(h,c){dc[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
+    var dc={};['Personne','Net vendu','Dont règlement en attente','Part de chacun','Virements faits','Virements reçus','Solde (positif = doit)'].forEach(function(h,c){dc[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
     var vr=function(L){return 'Ventes!$'+L+'$2:$'+L+'$'+Math.max(last,2);},tr_=function(L){return 'Virements!$'+L+'$2:$'+L+'$'+tlast;};
     b.rows.forEach(function(r,i){var R=i+2;function p(c,cell){dc[X.utils.encode_cell({r:i+1,c:c})]=cell;}
       p(0,{t:'s',v:r.n});
-      p(1,{t:'n',v:r.enc,f:'SUMIFS('+vr('G')+','+vr('K')+',A'+R+','+vr('N')+',"Versé")',z:EUR});
-      p(2,{t:'n',v:b.fair,f:'SUM($B$2:$B$'+(ub+1)+')/'+ub,z:EUR});
-      p(3,{t:'n',v:r.out,f:'SUMIF('+tr_('B')+',A'+R+','+tr_('D')+')',z:EUR});
-      p(4,{t:'n',v:r.inn,f:'SUMIF('+tr_('C')+',A'+R+','+tr_('D')+')',z:EUR});
-      p(5,{t:'n',v:r.bal,f:'B'+R+'-D'+R+'+E'+R+'-C'+R,z:EUR});});
-    dc['!ref']='A1:F'+(ub+1);dc['!cols']=[{wch:14},{wch:16},{wch:14},{wch:16},{wch:16},{wch:22}];
+      p(1,{t:'n',v:r.enc,f:'SUMIF('+vr('K')+',A'+R+','+vr('G')+')',z:EUR});
+      p(2,{t:'n',v:r.pend,f:'SUMIFS('+vr('G')+','+vr('K')+',A'+R+','+vr('N')+',"En attente")',z:EUR});
+      p(3,{t:'n',v:b.fair,f:'SUM($B$2:$B$'+(ub+1)+')/'+ub,z:EUR});
+      p(4,{t:'n',v:r.out,f:'SUMIF('+tr_('B')+',A'+R+','+tr_('D')+')',z:EUR});
+      p(5,{t:'n',v:r.inn,f:'SUMIF('+tr_('C')+',A'+R+','+tr_('D')+')',z:EUR});
+      p(6,{t:'n',v:r.bal,f:'B'+R+'-E'+R+'+F'+R+'-D'+R,z:EUR});});
+    var TT=ub+3;dc[X.utils.encode_cell({r:ub+1,c:0})]={t:'s',v:'TOTAL'};
+    dc[X.utils.encode_cell({r:ub+1,c:1})]={t:'n',v:b.tot,f:'SUM(B2:B'+(ub+1)+')',z:EUR};
+    dc[X.utils.encode_cell({r:ub+1,c:2})]={t:'n',v:b.pend,f:'SUM(C2:C'+(ub+1)+')',z:EUR};
+    dc['!ref']='A1:G'+(ub+2);dc['!cols']=[{wch:14},{wch:14},{wch:24},{wch:16},{wch:16},{wch:16},{wch:22}];
     X.utils.book_append_sheet(wb,dc,'Décompte');X.utils.book_append_sheet(wb,tv,'Virements');
     var rr=abos.map(roiOf),ro={};['Saison','Abonné','Abonnement payé','Net revendu (saison)','Part revendue','Reste à rembourser','Taux de remboursement','Origine','N° de commande'].forEach(function(h,c){ro[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
     rr.forEach(function(R,i){var r=i+1,RW=i+2;function p(c,cell){ro[X.utils.encode_cell({r:r,c:c})]=cell;}
@@ -1047,4 +1051,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build roi -->
+<!-- build coherence -->
