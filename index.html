@@ -137,6 +137,10 @@ tr.tot th,tr.tot td{font-weight:700;border-top:2px solid var(--line)}
 .fld select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:16px var(--f-body)}
 .fld input[type=date]{min-width:0}
 @media (max-width:420px){.kpis .big{font-size:22px}}
+details.fx.past{opacity:.6}
+details.fx.past[open]{opacity:1}
+.pill.s-pretee{background:var(--accent-soft);color:var(--accent)}
+.pill.s-nonvendue{background:var(--crit-soft);color:var(--crit)}
 </style>
 </head>
 <body>
@@ -174,7 +178,7 @@ var URL_OPEN='https://billetterie.parisfc.fr/fr/calendrier?filters%5Bstate%5D%5B
 var URL_ALL='https://billetterie.parisfc.fr/fr/calendrier';
 var URL_PLAT='https://secondechance.parisfc.fr';
 var DEF={basePrice:null,markup:0,drop7:10,drop3:20,floorPct:50,watchFrom:21,lastCheck:null,lastCheckBy:null};
-var STATUS=[['attente','Pas encore ouverte'],['ouverte','Ouverte, à poster'],['enligne','En vente'],['vendue','Vendue'],['gardee','Je garde']];
+var STATUS=[['attente','Pas encore ouverte'],['ouverte','Ouverte, à poster'],['enligne','En vente'],['vendue','Vendue'],['pretee','Prêtée'],['nonvendue','Non vendue'],['gardee','Je garde']];
 var STATUS_LABEL={};STATUS.forEach(function(s){STATUS_LABEL[s[0]]=s[1];});
 
 var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set(), ventes=[], tab='matchs';
@@ -210,7 +214,7 @@ function whenLabel(m){
   var wd=new Intl.DateTimeFormat('fr-FR',{weekday:'long',timeZone:'UTC'}).format(d);
   return wd+(m.time?' '+String(m.time).replace(':','h'):'');
 }
-function jLabel(J){return J===0?'Jour J':'J-'+J;}
+function jLabel(J){return J<0?'il y a '+(-J)+' j':(J===0?'Jour J':'J-'+J);}
 function ago(iso){
   var t=new Date(iso).getTime();if(isNaN(t))return '';
   var s=Math.max(0,Math.round((Date.now()-t)/1000));
@@ -261,11 +265,20 @@ function buildTodo(rows){
 /* ---------- vues ---------- */
 function card(r){
   var m=r.m,J=r.J,p=r.p,id=esc(m.id),st=stubParts(m),listed=num(m.listed);
+  var isPast=J<0;
   var px='—',cap='prix à définir';
   if(m.status==='vendue'){px='Vendue';cap=listed!=null?eur(listed):'';}
   else if(m.status==='gardee'){px='Gardée';cap='';}
   else if(m.status==='enligne'&&listed!=null){px=eur(listed);cap='affiché';}
   else if(p){px=eur(p.now);cap='conseillé';}
+  if(isPast){
+    var sv=ventes.filter(function(v){return v.matchId===m.id||v.date===m.date;})[0];
+    if(m.status==='vendue'){px=sv?eur(netOf(sv)):'Vendue';cap=sv?'net perçu':'';}
+    else if(m.status==='pretee'){px='Prêtée';cap='';}
+    else if(m.status==='nonvendue'){px='Non vendue';cap='vente non aboutie';}
+    else if(m.status==='gardee'){px='Gardée';cap='';}
+    else{px='À renseigner';cap='issue du match';}
+  }
   var seg=STATUS.map(function(s){return '<button type="button" class="seg-b" data-act="status" data-id="'+id+'" data-v="'+s[0]+'" aria-pressed="'+(m.status===s[0])+'">'+s[1]+'</button>';}).join('');
   var planHtml='';
   if(p){
@@ -274,7 +287,7 @@ function card(r){
       '<button type="button" class="btn ghost small" data-act="copy" data-v="'+p.now+'">Copier le prix</button></div>'+
       '<ul class="tiers">'+p.tiers.map(function(t){return '<li class="'+(t.cur?'cur':'')+'"><span>'+t.k+'</span><b>'+eur(t.price)+'</b></li>';}).join('')+'</ul>'+
       '<p class="note">Prochaine baisse : '+nextTxt+'</p></div>';
-  }else{
+  }else if(!isPast){
     planHtml='<div class="plan"><p class="note">Renseigne le prix payé ci-dessous, ou un prix de base dans « Grille de prix », pour voir les prix conseillés.</p></div>';
   }
   var acts='';
@@ -288,7 +301,7 @@ function card(r){
   var info=[];
   if((m.status==='enligne'||m.status==='vendue')&&m.postedBy)info.push('Mise en vente par '+esc(m.postedBy));
   if(m.updatedBy&&m.updatedAt){var a=ago(m.updatedAt);if(a)info.push('Dernière modification : '+esc(m.updatedBy)+', '+a);}
-  return '<details class="fx" id="fx-'+id+'" data-key="'+id+'"'+(openSet.has(m.id)?' open':'')+'>'+
+  return '<details class="fx'+(isPast?' past':'')+'" id="fx-'+id+'" data-key="'+id+'"'+(openSet.has(m.id)?' open':'')+'>'+
     '<summary><span class="stub"><b>'+st.day+'</b><i>'+esc(st.mon)+'</i></span>'+
     '<span class="main"><span class="opp">'+esc(m.opp)+'</span><span class="meta">'+esc(whenLabel(m))+' · <span class="j">'+jLabel(J)+'</span></span></span>'+
     '<span class="side"><span class="pill s-'+esc(m.status)+'">'+esc(STATUS_LABEL[m.status]||m.status)+'</span><span class="px">'+esc(px)+'</span>'+(cap?'<span class="cap">'+esc(cap)+'</span>':'')+'</span>'+
@@ -361,6 +374,7 @@ function render(){
   var today=parisToday();
   var rows=matches.filter(function(m){return m&&m.date;}).map(function(m){return {m:m,J:daysBetween(today,m.date)};}).filter(function(r){return r.J>=0;});
   rows.forEach(function(r){r.p=plan(r.m,r.J);});
+  var past=matches.filter(function(m){return m&&m.date;}).map(function(m){return {m:m,J:daysBetween(today,m.date)};}).filter(function(r){return r.J<0;}).sort(function(a,b){return b.J-a.J;});
   var fin=(state==='ok'&&tab==='fin');
   var h=titleBlock(state==='ok'?rows.length+' matchs à domicile à venir · abonnement Paris FC':'Abonnement Paris FC');
   if(state==='ok')h+=tabsNav();
@@ -386,6 +400,7 @@ function render(){
     h+='</section>';
     h+='<section aria-labelledby="h-fx"><h2 id="h-fx" style="margin-bottom:10px">Matchs à domicile</h2><div class="fixtures">'+
       (rows.length?rows.map(card).join(''):'<p class="panel sub">Aucun match enregistré.</p>')+'</div></section>';
+    if(past.length)h+='<section aria-labelledby="h-past"><h2 id="h-past" style="margin-bottom:10px">Matchs passés ('+past.length+')</h2><div class="fixtures">'+past.map(card).join('')+'</div></section>';
     h+=learned();
     h+=settings();
     h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';
@@ -487,7 +502,7 @@ function newSale(d){
   return saveVente(rec);
 }
 function ensureSale(m){
-  if(ventes.some(function(v){return v.matchId===m.id;}))return;
+  if(ventes.some(function(v){return v.matchId===m.id||v.date===m.date;}))return;
   newSale({date:parisToday(),label:'Paris FC – '+m.opp,matchId:m.id,price:m.listed||0,fee:0});
   toast('Vente ajoutée aux finances : vérifie le montant et la commission.');
 }
@@ -575,6 +590,14 @@ async function seedIfEmpty(){
   SEED.forEach(function(m,i){b.set(mref().doc(m[0]),{order:i+1,opp:m[1],date:m[2],time:m[3],weekend:m[4],status:'attente',paid:null,floor:null,listed:null,openedOn:null,postedBy:null,updatedBy:null,updatedAt:null});});
   await b.commit();
 }
+var PAST=[['p01','Nice','2026-08-30','15:00'],['p02','Lyon','2026-09-12','20:45'],['p03','Strasbourg','2026-09-19','17:15'],['p04','Rennes','2026-10-18','17:15'],['p05','Monaco','2026-11-01','17:15']];
+async function seedPastIfMissing(){
+  var s=await mref().doc('p01').get();
+  if(s.exists)return;
+  var b=db.batch();
+  PAST.forEach(function(m,i){b.set(mref().doc(m[0]),{order:i-PAST.length,opp:m[1],date:m[2],time:m[3],weekend:false,status:'vendue',paid:null,floor:null,listed:null,openedOn:null,postedBy:null,updatedBy:null,updatedAt:null});});
+  await b.commit();
+}
 async function reload(){
   var a=await mref().orderBy('order').get();
   var c=await cref().get();
@@ -603,7 +626,7 @@ function onRemote(){clearTimeout(debounce);debounce=setTimeout(refresh,400);}
 
 async function startApp(){
   state='loading';render();
-  try{await seedIfEmpty();await reload();state='ok';render();startSync();}
+  try{await seedIfEmpty();await seedPastIfMissing();await reload();state='ok';render();startSync();}
   catch(e){
     if(isAuthError(e)){
       state='error';
