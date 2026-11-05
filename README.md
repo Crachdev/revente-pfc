@@ -1,4 +1,4 @@
-# Revente Jean-Bouin : suivi des reventes Paris FC
+# Revente PFC : suivi des reventes Paris FC
 
 Application privée pour suivre la revente des places d'abonnement (Paris FC), les prix conseillés et les ventes encaissées. Utilisée à deux (Rachid et Sylvain), depuis n'importe où.
 
