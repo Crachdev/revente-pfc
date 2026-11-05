@@ -1,14 +1,14 @@
-// Configuration Firebase (projet certifs-quiz-rb). Ces valeurs sont publiques par conception :
+// Configuration Firebase (projet revente-pfc). Ces valeurs sont publiques par conception :
 // la protection vient du compte commun (mot de passe) et des règles Firestore.
 window.PFC_CONFIG = {
   FIREBASE: {
-    apiKey: "AIzaSyCrGHp8XXr8HfMpRJELVpVX6X97MOIh2Nc",
-    authDomain: "certifs-quiz-rb.firebaseapp.com",
-    projectId: "certifs-quiz-rb",
-    storageBucket: "certifs-quiz-rb.firebasestorage.app",
-    messagingSenderId: "590989073340",
-    appId: "1:590989073340:web:1082aefb5e7b6eca63ea80"
+    apiKey: "AIzaSyA6i8QkbOQyRwwXU6rDSgf5HPNGOCvheMk",
+    authDomain: "revente-pfc.firebaseapp.com",
+    projectId: "revente-pfc",
+    storageBucket: "revente-pfc.firebasestorage.app",
+    messagingSenderId: "802402150704",
+    appId: "1:802402150704:web:3c7386d2f3d6df116d00f5"
   },
-  // Adresse du compte commun créé dans Firebase Authentication (étape 2 du LISEZMOI).
+  // Adresse du compte commun créé dans Firebase Authentication.
   SHARED_EMAIL: "revente@parisfc-revente.fr"
 };
