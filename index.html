@@ -138,6 +138,11 @@ tr.tot th,tr.tot td{font-weight:700;border-top:2px solid var(--line)}
 .vlist{display:flex;flex-direction:column;gap:14px}
 .vrow{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--line)}
 .vrow:first-child{border-top:0;padding-top:0}
+.verdict{font-size:18px;line-height:1.3}
+.warn-n{color:var(--warn)}
+.src{display:inline-block;align-self:flex-start;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.src.bil{background:var(--accent-soft);color:var(--accent)}
+.src.man{background:var(--warn-soft);color:var(--warn)}
 .vhead{display:flex;flex-direction:column;gap:2px}
 .fld select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:16px var(--f-body)}
 .fld input[type=date]{min-width:0}
@@ -184,7 +189,7 @@ var DEF={basePrice:null,markup:0,drop7:10,drop3:20,floorPct:50,watchFrom:21,last
 var STATUS=[['attente','Pas encore ouverte'],['ouverte','Ouverte, à poster'],['enligne','En vente'],['vendue','Vendue'],['pretee','Prêtée'],['nonvendue','Non vendue'],['gardee','Je garde']];
 var STATUS_LABEL={};STATUS.forEach(function(s){STATUS_LABEL[s[0]]=s[1];});
 
-var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set(), ventes=[], tab='matchs';
+var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set(), ventes=[], transfers=[], tab='matchs';
 var state='boot', loginErr='', errMsg='', who=null;
 var toastTimer=null, pending=false, pollTimer=null, debounce=null;
 var app=document.getElementById('app');
@@ -445,6 +450,50 @@ function sumTable(title,list,keyLabel){
   return '<section class="panel" aria-label="'+esc(title)+'"><h2>'+esc(title)+'</h2><div class="tbl"><table><thead><tr><th scope="col">'+esc(keyLabel)+'</th><th scope="col">Nb</th><th scope="col">Brut</th><th scope="col">Comm.</th><th scope="col">Net</th><th scope="col">Part ÷2</th></tr></thead><tbody>'+
     list.map(function(g){return row(g);}).join('')+row({k:'Total',n:tot.n,brut:tot.brut,fee:tot.fee,net:tot.net},true)+'</tbody></table></div></section>';
 }
+
+function sellers(){return users().map(function(u){return u.name;});}
+function r2(n){return Math.round(n*100)/100;}
+function selOpts(sel,blank){var o=blank?'<option value="">— à renseigner —</option>':'';return o+sellers().map(function(n){return '<option value="'+esc(n)+'"'+(n===sel?' selected':'')+'>'+esc(n)+'</option>';}).join('');}
+function srcLabel(v){
+  if(v.source==='billetterie')return 'Récupérée depuis la billetterie'+(v.edited?' · modifiée à la main par '+v.edited:'')+(v.by?' (importée par '+v.by+')':'');
+  return 'Saisie manuelle'+(v.by?' par '+v.by:'');
+}
+function balance(){
+  var us=sellers(),enc={},tin={},tout={};
+  us.forEach(function(n){enc[n]=0;tin[n]=0;tout[n]=0;});
+  var un=0;
+  ventes.forEach(function(v){if(enc[v.seller]!==undefined)enc[v.seller]+=netOf(v);else un++;});
+  transfers.forEach(function(t){if(tout[t.from]!==undefined)tout[t.from]+=t.amount;if(tin[t.to]!==undefined)tin[t.to]+=t.amount;});
+  var tot=us.reduce(function(s,n){return s+enc[n];},0),fair=us.length?tot/us.length:0;
+  return {un:un,tot:tot,fair:fair,rows:us.map(function(n){return {n:n,enc:enc[n],out:tout[n],inn:tin[n],bal:r2(enc[n]-tout[n]+tin[n]-fair)};})};
+}
+function balanceView(){
+  var b=balance(),h='<section class="panel" aria-labelledby="h-bal"><h2 id="h-bal">Qui a encaissé, qui doit quoi</h2>';
+  var debt=b.rows.filter(function(r){return r.bal>0.005;}),cred=b.rows.filter(function(r){return r.bal<-0.005;});
+  var msg;
+  if(!ventes.length)msg='Aucune vente pour l’instant.';
+  else if(!debt.length)msg='Les comptes sont à jour.';
+  else if(debt.length===1&&cred.length===1)msg='<b>'+esc(debt[0].n)+' doit '+eur(debt[0].bal)+' à '+esc(cred[0].n)+'.</b>';
+  else msg=b.rows.map(function(r){return esc(r.n)+' : '+(r.bal>0?'doit '+eur(r.bal):r.bal<0?'doit recevoir '+eur(-r.bal):'à jour');}).join(' · ');
+  h+='<p class="verdict">'+msg+'</p>';
+  if(b.un)h+='<p class="note warn-n">'+b.un+' vente(s) sans vendeur renseigné : elles ne sont pas comptées ici. Choisis le vendeur dans « Détail des ventes ».</p>';
+  h+='<div class="tbl"><table><thead><tr><th scope="col">Qui</th><th scope="col">Encaissé</th><th scope="col">Viré</th><th scope="col">Reçu</th><th scope="col">Solde</th></tr></thead><tbody>'+
+    b.rows.map(function(r){return '<tr><th scope="row">'+esc(r.n)+'</th><td>'+eur(r.enc)+'</td><td>'+eur(r.out)+'</td><td>'+eur(r.inn)+'</td><td>'+(r.bal>0.005?'doit '+eur(r.bal):r.bal<-0.005?'reçoit '+eur(-r.bal):'0 €')+'</td></tr>';}).join('')+'</tbody></table></div>';
+  h+='<p class="note">Encaissé = net des ventes dont la personne est le vendeur (c’est elle qui reçoit le virement du club). Part de chacun = total net ÷ nombre de personnes (actuellement '+eur(b.fair)+' chacun). Solde = encaissé − virements faits + virements reçus − part.</p>';
+  var us=sellers();
+  h+='<details class="panel set" data-key="addt"'+(openSet.has('addt')?' open':'')+'><summary><span class="h2">Enregistrer un virement entre nous</span><span class="chev" aria-hidden="true"></span></summary>'+
+    '<form id="tr-form" style="display:flex;flex-direction:column;gap:12px"><div class="grid">'+
+    '<div class="fld"><label for="t-from">Qui a viré</label><select id="t-from">'+selOpts(who,false)+'</select></div>'+
+    '<div class="fld"><label for="t-to">À qui</label><select id="t-to">'+selOpts(us.filter(function(n){return n!==who;})[0]||'',false)+'</select></div>'+
+    '<div class="fld"><label for="t-amt">Montant (€)</label><input id="t-amt" type="number" inputmode="decimal" step="0.01" min="0" required></div>'+
+    '<div class="fld"><label for="t-date">Date</label><input id="t-date" type="date" value="'+parisToday()+'" required></div></div>'+
+    '<div class="fld"><label for="t-note">Note</label><input id="t-note" type="text"></div>'+
+    '<button type="submit" class="btn">Enregistrer le virement</button></form></details>';
+  if(transfers.length){
+    h+='<div class="vlist">'+transfers.map(function(t){return '<div class="vrow"><div class="vhead"><b>'+esc(t.from)+' → '+esc(t.to)+' · '+eur(t.amount)+'</b><span class="muted">'+esc(t.date)+(t.note?' · '+esc(t.note):'')+(t.by?' · saisi par '+esc(t.by):'')+'</span></div><button type="button" class="btn ghost small" data-act="deltr" data-id="'+esc(t.id)+'">Supprimer ce virement</button></div>';}).join('')+'</div>';
+  }
+  return h+'</section>';
+}
 function financeView(){
   var list=sortedVentes();
   var tot=list.reduce(function(a,v){a.brut+=v.price;a.fee+=v.fee;a.net+=netOf(v);return a;},{brut:0,fee:0,net:0});
@@ -452,6 +501,7 @@ function financeView(){
     '<div class="kpis"><div><span class="cap">Net encaissé</span><b class="big">'+eur(tot.net)+'</b></div><div><span class="cap">Par personne</span><b class="big">'+eur(tot.net/2)+'</b></div><div><span class="cap">Ventes</span><b class="big">'+list.length+'</b></div></div>'+
     '<button type="button" class="btn" data-act="export"'+(list.length?'':' disabled')+'>Exporter en Excel</button>'+
     '<p class="note">Une vente = une paire de places. Le net est le prix de vente moins la commission du club ; « par personne » est la moitié du net. Saison du 1er août au 31 juillet, année fiscale = année civile.</p></section>';
+  h+=balanceView();
   var opts='<option value="">Autre / hors liste</option>'+matches.map(function(m){return '<option value="'+esc(m.id)+'">'+esc('Paris FC – '+m.opp+' ('+m.date+')')+'</option>';}).join('');
   h+='<details class="panel set" data-key="addv"'+(openSet.has('addv')||!list.length?' open':'')+'><summary><span class="h2">Ajouter une vente</span><span class="chev" aria-hidden="true"></span></summary>'+
     '<form id="vente-form" style="display:flex;flex-direction:column;gap:12px">'+
@@ -460,18 +510,23 @@ function financeView(){
     '<div class="grid"><div class="fld"><label for="v-date">Date de la vente</label><input id="v-date" type="date" value="'+parisToday()+'" required></div>'+
     '<div class="fld"><label for="v-price">Prix de vente de la paire (€)</label><input id="v-price" type="number" inputmode="decimal" step="0.01" min="0" required></div>'+
     '<div class="fld"><label for="v-fee">Commission du club (€)</label><input id="v-fee" type="number" inputmode="decimal" step="0.01" min="0" value="0"></div>'+
+    '<div class="fld"><label for="v-seller">Vendu par (a reçu l’argent)</label><select id="v-seller">'+selOpts(who,true)+'</select></div>'+
     '<div class="fld"><label for="v-note">Note</label><input id="v-note" type="text"></div></div>'+
     '<button type="submit" class="btn">Enregistrer la vente</button></form></details>';
   h+='<details class="panel set" data-key="imp"'+(openSet.has('imp')?' open':'')+'><summary><span class="h2">Importer des ventes</span><span class="chev" aria-hidden="true"></span></summary>'+
     '<p class="note">Colle une vente par ligne : <strong>date;libellé;prix de la paire;commission;n° de lot</strong> (par exemple 2026-09-12;Paris FC – Lyon;130,00;15,60;1765). Une vente déjà importée (même n° de lot) est ignorée.</p>'+
+    '<div class="fld" style="margin-top:12px"><label for="imp-seller">Vendeur des ventes importées</label><select id="imp-seller">'+selOpts(who,true)+'</select></div>'+
     '<div class="fld" style="margin-top:12px"><label for="imp-text">Lignes à importer</label><textarea id="imp-text" rows="6" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:14px var(--f-body)"></textarea></div>'+
     '<button type="button" class="btn" data-act="import" style="margin-top:12px">Importer</button></details>';
   h+=sumTable('Par saison',groupBy(list,seasonOf),'Saison')+sumTable('Par année fiscale',groupBy(list,fiscalOf),'Année');
   if(list.length){
     h+='<section class="panel" aria-labelledby="h-det"><h2 id="h-det">Détail des ventes</h2><div class="vlist">'+list.map(function(v){
       function f(label,field,val,type){return '<div class="fld"><label for="vf-'+field+'-'+esc(v.id)+'">'+label+'</label><input id="vf-'+field+'-'+esc(v.id)+'" type="'+type+'" '+(type==='number'?'inputmode="decimal" step="0.01" min="0" ':'')+'data-vf="'+field+'" data-vid="'+esc(v.id)+'" value="'+esc(val==null?'':val)+'"></div>';}
-      return '<div class="vrow"><div class="vhead"><b>'+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOf(v.date))+' · net '+eur(netOf(v))+(v.by?' · '+esc(v.by):'')+'</span></div>'+
-        '<div class="grid">'+f('Date','date',v.date,'date')+f('Prix (€)','price',v.price,'number')+f('Commission (€)','fee',v.fee,'number')+f('Libellé','label',v.label,'text')+'</div>'+
+      return '<div class="vrow"><div class="vhead"><b>'+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOf(v.date))+' · net '+eur(netOf(v))+'</span>'+
+        '<span class="src '+(v.source==='billetterie'?'bil':'man')+'">'+esc(srcLabel(v))+'</span>'+
+        '<span class="muted">Vendu par : <b>'+(v.seller?esc(v.seller):'à renseigner')+'</b></span></div>'+
+        '<div class="grid">'+f('Date','date',v.date,'date')+f('Prix (€)','price',v.price,'number')+f('Commission (€)','fee',v.fee,'number')+f('Libellé','label',v.label,'text')+
+          '<div class="fld"><label for="vf-seller-'+esc(v.id)+'">Vendu par</label><select id="vf-seller-'+esc(v.id)+'" data-vf="seller" data-vid="'+esc(v.id)+'">'+selOpts(v.seller,true)+'</select></div></div>'+
         '<button type="button" class="btn ghost small" data-act="delvente" data-id="'+esc(v.id)+'">Supprimer cette vente</button></div>';
     }).join('')+'</div></section>';
   }
@@ -485,7 +540,7 @@ async function importVentes(text){
     if(c.length<4||!/^\d{4}-\d{2}-\d{2}$/.test(c[0])){bad++;return;}
     var lot=c[4]||'';var id=lot?('vlot'+lot.replace(/\W/g,'')):('v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
     if(ventes.some(function(v){return v.id===id;})||o[id]){dup++;return;}
-    o[id]={date:c[0],label:c[1],matchId:null,price:num(c[2])||0,fee:num(c[3])||0,note:lot?('Lot '+lot):'',by:who};
+    o[id]={date:c[0],label:c[1],matchId:null,price:num(c[2])||0,fee:num(c[3])||0,note:lot?('Lot '+lot):'',by:who,seller:(document.getElementById('imp-seller')||{}).value||'',source:lot?'billetterie':'manuel'};
   });
   var ids=Object.keys(o);
   if(!ids.length){toast(bad?'Aucune ligne valide (format : date;libellé;prix;commission;lot).':'Rien de nouveau à importer.');return;}
@@ -502,13 +557,13 @@ async function saveVente(rec){
   catch(e){if(isAuthError(e)){await logout();return;}toast('Enregistrement impossible : '+(e.message||e.code));await refresh();}
 }
 function newSale(d){
-  var rec={id:'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),date:d.date,label:d.label||'',matchId:d.matchId||null,price:num(d.price)||0,fee:num(d.fee)||0,note:d.note||'',by:who};
+  var rec={id:'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),date:d.date,label:d.label||'',matchId:d.matchId||null,price:num(d.price)||0,fee:num(d.fee)||0,note:d.note||'',by:who,seller:d.seller===undefined?who:d.seller,source:d.source||'manuel'};
   return saveVente(rec);
 }
 function ensureSale(m){
   if(ventes.some(function(v){return v.matchId===m.id||v.date===m.date;}))return;
   newSale({date:parisToday(),label:'Paris FC – '+m.opp,matchId:m.id,price:m.listed||0,fee:0});
-  toast('Vente ajoutée aux finances : vérifie le montant et la commission.');
+  toast('Vente ajoutée aux finances (vendeur : '+who+') : vérifie le vendeur, le montant et la commission.');
 }
 async function deleteVente(id){
   ventes=ventes.filter(function(x){return x.id!==id;});render();
@@ -520,7 +575,7 @@ function exportXlsx(){
   var X=window.XLSX,list=sortedVentes().slice().reverse();
   var EUR='#,##0.00 "€"';
   var ws={},n=list.length,last=n+1;
-  var head=['Date','Match','Saison','Année fiscale','Prix de vente (paire)','Commission','Net perçu','Par personne','Saisi par','Note'];
+  var head=['Date','Match','Saison','Année fiscale','Prix de vente (paire)','Commission','Net perçu','Par personne','Saisi par','Note','Vendu par (a encaissé)','Origine'];
   head.forEach(function(h,c){ws[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
   list.forEach(function(v,i){
     var r=i+1,R=r+1,d=new Date(v.date+'T00:00:00Z');
@@ -528,16 +583,16 @@ function exportXlsx(){
     put(0,{t:'d',v:d,z:'dd/mm/yyyy'});put(1,{t:'s',v:v.label||''});put(2,{t:'s',v:seasonOf(v.date)});put(3,{t:'s',v:fiscalOf(v.date)});
     put(4,{t:'n',v:v.price,z:EUR});put(5,{t:'n',v:v.fee,z:EUR});
     put(6,{t:'n',v:netOf(v),f:'E'+R+'-F'+R,z:EUR});put(7,{t:'n',v:netOf(v)/2,f:'G'+R+'/2',z:EUR});
-    put(8,{t:'s',v:v.by||''});put(9,{t:'s',v:v.note||''});
+    put(8,{t:'s',v:v.by||''});put(9,{t:'s',v:v.note||''});put(10,{t:'s',v:v.seller||''});put(11,{t:'s',v:v.source==='billetterie'?'Billetterie'+(v.edited?' (modifiée par '+v.edited+')':''):'Saisie manuelle'});
   });
   var tr=n+1,TR=tr+1,tot={p:0,f:0,n:0};list.forEach(function(v){tot.p+=v.price;tot.f+=v.fee;tot.n+=netOf(v);});
   if(n){
     ws[X.utils.encode_cell({r:tr,c:1})]={t:'s',v:'TOTAL'};
     [['E',4,tot.p],['F',5,tot.f],['G',6,tot.n],['H',7,tot.n/2]].forEach(function(a){ws[X.utils.encode_cell({r:tr,c:a[1]})]={t:'n',v:a[2],f:'SUM('+a[0]+'2:'+a[0]+last+')',z:EUR};});
   }
-  ws['!ref']='A1:J'+(n?TR:1);
-  ws['!cols']=[{wch:12},{wch:30},{wch:10},{wch:13},{wch:20},{wch:13},{wch:13},{wch:14},{wch:12},{wch:30}];
-  ws['!autofilter']={ref:'A1:J'+(n?last:1)};
+  ws['!ref']='A1:L'+(n?TR:1);
+  ws['!cols']=[{wch:12},{wch:30},{wch:10},{wch:13},{wch:20},{wch:13},{wch:13},{wch:14},{wch:12},{wch:30},{wch:22},{wch:30}];
+  ws['!autofilter']={ref:'A1:L'+(n?last:1)};
   function summary(groups,col,keyHead){
     var s={},hd=[keyHead,'Nombre de ventes','Brut','Commission','Net perçu','Par personne'];
     hd.forEach(function(h,c){s[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
@@ -565,6 +620,23 @@ function exportXlsx(){
   X.utils.book_append_sheet(wb,ws,'Ventes');
   X.utils.book_append_sheet(wb,summary(groupBy(list,seasonOf).reverse(),'C','Saison'),'Par saison');
   X.utils.book_append_sheet(wb,summary(groupBy(list,fiscalOf).reverse(),'D','Année fiscale'),'Par année fiscale');
+  (function(){
+    var us=sellers(),b=balance(),tl=transfers.slice().reverse(),tn=tl.length,tlast=Math.max(tn+1,2),ub=us.length;
+    var tv={};['Date','De','Vers','Montant','Note','Saisi par'].forEach(function(h,c){tv[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
+    tl.forEach(function(t,i){var r=i+1;tv[X.utils.encode_cell({r:r,c:0})]={t:'d',v:new Date(t.date+'T00:00:00Z'),z:'dd/mm/yyyy'};tv[X.utils.encode_cell({r:r,c:1})]={t:'s',v:t.from};tv[X.utils.encode_cell({r:r,c:2})]={t:'s',v:t.to};tv[X.utils.encode_cell({r:r,c:3})]={t:'n',v:t.amount,z:EUR};tv[X.utils.encode_cell({r:r,c:4})]={t:'s',v:t.note||''};tv[X.utils.encode_cell({r:r,c:5})]={t:'s',v:t.by||''};});
+    tv['!ref']='A1:F'+(tn?tn+1:1);tv['!cols']=[{wch:12},{wch:12},{wch:12},{wch:13},{wch:30},{wch:12}];
+    var dc={};['Personne','Encaissé (net)','Part due','Virements faits','Virements reçus','Solde (positif = doit)'].forEach(function(h,c){dc[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
+    var vr=function(L){return 'Ventes!$'+L+'$2:$'+L+'$'+Math.max(last,2);},tr_=function(L){return 'Virements!$'+L+'$2:$'+L+'$'+tlast;};
+    b.rows.forEach(function(r,i){var R=i+2;function p(c,cell){dc[X.utils.encode_cell({r:i+1,c:c})]=cell;}
+      p(0,{t:'s',v:r.n});
+      p(1,{t:'n',v:r.enc,f:'SUMIF('+vr('K')+',A'+R+','+vr('G')+')',z:EUR});
+      p(2,{t:'n',v:b.fair,f:'SUM($B$2:$B$'+(ub+1)+')/'+ub,z:EUR});
+      p(3,{t:'n',v:r.out,f:'SUMIF('+tr_('B')+',A'+R+','+tr_('D')+')',z:EUR});
+      p(4,{t:'n',v:r.inn,f:'SUMIF('+tr_('C')+',A'+R+','+tr_('D')+')',z:EUR});
+      p(5,{t:'n',v:r.bal,f:'B'+R+'-D'+R+'+E'+R+'-C'+R,z:EUR});});
+    dc['!ref']='A1:F'+(ub+1);dc['!cols']=[{wch:14},{wch:16},{wch:14},{wch:16},{wch:16},{wch:22}];
+    X.utils.book_append_sheet(wb,dc,'Décompte');X.utils.book_append_sheet(wb,tv,'Virements');
+  })();
   X.writeFile(wb,'revente-pfc-ventes-'+parisToday()+'.xlsx',{cellDates:true});
   toast('Fichier Excel généré.');
 }
@@ -608,7 +680,15 @@ async function reload(){
   matches=a.docs.map(function(d){var r=d.data();r.id=d.id;r.paid=num(r.paid);r.floor=num(r.floor);r.listed=num(r.listed);return r;});
   cfg=Object.assign({},DEF,c.exists?c.data():{});
   var vd=await vref().get();var vm=(vd.exists&&vd.data().v)||{};
-  ventes=Object.keys(vm).map(function(k){var r=vm[k];r.id=k;r.price=num(r.price)||0;r.fee=num(r.fee)||0;return r;});
+  ventes=Object.keys(vm).map(function(k){var r=vm[k];r.id=k;r.price=num(r.price)||0;r.fee=num(r.fee)||0;
+    if(!r.source)r.source=/^vlot/.test(k)?'billetterie':'manuel';
+    if(r.seller===undefined)r.seller=/^vlot/.test(k)?'Sylvain':'';
+    return r;});
+  var tm=(vd.exists&&vd.data().t)||{};
+  transfers=Object.keys(tm).map(function(k){var r=tm[k];r.id=k;r.amount=num(r.amount)||0;return r;}).sort(function(x,y){return String(y.date).localeCompare(String(x.date));});
+  var mig={},nm=0;
+  ventes.forEach(function(x){var raw=vm[x.id]||{};if(raw.source===undefined||raw.seller===undefined){mig[x.id]={source:x.source,seller:x.seller};nm++;}});
+  if(nm){try{await vref().set({v:mig},{merge:true});}catch(e){}}
 }
 function isTyping(){var a=document.activeElement;return !!(a&&a.tagName==='INPUT'&&app.contains(a));}
 async function refresh(){
@@ -676,6 +756,12 @@ app.addEventListener('click',async function(e){
   var t=e.target.closest('[data-act]');if(!t)return;
   var act=t.dataset.act,id=t.dataset.id;
   if(act==='theme'){var d=!isDark();if(d)document.documentElement.setAttribute('data-theme','dark');else document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('pfc-theme',d?'dark':'light');}catch(_){}var mt=document.querySelector('meta[name=theme-color]');if(mt)mt.content=d?'#0a111e':'#1c4fd8';t.setAttribute('aria-checked',d);var l=t.querySelector('.swl');if(l)l.textContent=d?'Sombre':'Clair';return;}
+  if(act==='deltr'){
+    transfers=transfers.filter(function(x){return x.id!==id;});render();
+    try{await vref().update('t.'+id,firebase.firestore.FieldValue.delete());}
+    catch(e){if(isAuthError(e)){await logout();return;}toast('Suppression impossible : '+(e.message||e.code));await refresh();}
+    return;
+  }
   if(act==='copy'){copyText(t.dataset.v);return;}
   if(act==='open'){
     openSet.add(id);render();
@@ -714,6 +800,7 @@ app.addEventListener('change',function(e){
     var vv=ventes.filter(function(x){return x.id===t.dataset.vid;})[0];if(!vv)return;
     var nv=Object.assign({},vv),ff=t.dataset.vf;
     if(ff==='price'||ff==='fee')nv[ff]=num(t.value)||0;else if(ff==='date'){if(!t.value)return;nv[ff]=t.value;}else nv[ff]=t.value;
+    if(nv.source==='billetterie'&&(ff==='price'||ff==='fee'||ff==='date'))nv.edited=who;
     saveVente(nv);return;
   }
   if(t.dataset.field){
@@ -732,8 +819,19 @@ app.addEventListener('submit',async function(e){
     var label=mm?('Paris FC – '+mm.opp):(document.getElementById('v-label').value.trim()||'Vente');
     var d=document.getElementById('v-date').value;if(!d)return;
     openSet.delete('addv');
-    await newSale({date:d,label:label,matchId:mid||null,price:document.getElementById('v-price').value,fee:document.getElementById('v-fee').value,note:document.getElementById('v-note').value.trim()});
+    await newSale({date:d,label:label,matchId:mid||null,price:document.getElementById('v-price').value,fee:document.getElementById('v-fee').value,note:document.getElementById('v-note').value.trim(),seller:document.getElementById('v-seller').value});
     toast('Vente enregistrée.');return;
+  }
+  if(f.id==='tr-form'){
+    if(!db||state!=='ok')return;
+    var tf=document.getElementById('t-from').value,tt=document.getElementById('t-to').value,ta=num(document.getElementById('t-amt').value),td=document.getElementById('t-date').value;
+    if(!tf||!tt||tf===tt||!ta||ta<=0||!td){toast('Virement : choisis deux personnes différentes et un montant.');return;}
+    var tr={id:'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),from:tf,to:tt,amount:ta,date:td,note:document.getElementById('t-note').value.trim(),by:who};
+    transfers.unshift(tr);openSet.delete('addt');render();
+    var to={};to[tr.id]=tr;
+    try{await vref().set({t:to},{merge:true});toast('Virement enregistré.');}
+    catch(e){if(isAuthError(e)){await logout();return;}toast('Enregistrement impossible : '+(e.message||e.code));await refresh();}
+    return;
   }
   if(f.id==='login-form'){
     var pw=document.getElementById('pw').value;if(!pw)return;
@@ -794,4 +892,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build label2 -->
+<!-- build seller2 -->
