@@ -139,12 +139,18 @@ var STATUS=[['attente','Pas encore ouverte'],['ouverte','Ouverte, à poster'],['
 var STATUS_LABEL={};STATUS.forEach(function(s){STATUS_LABEL[s[0]]=s[1];});
 
 var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set();
-var state='boot', loginErr='', errMsg='', who=readWho();
+var state='boot', loginErr='', errMsg='', who=null;
 var toastTimer=null, pending=false, pollTimer=null, debounce=null;
 var app=document.getElementById('app');
 
 /* ---------- utilitaires ---------- */
-function readWho(){try{return localStorage.getItem('pfc_who')||null;}catch(e){return null;}}
+function users(){return (CFGX.USERS||[]).filter(function(u){return u&&u.name&&u.email;});}
+var selUser='';
+function lastUser(){if(selUser)return selUser;try{return localStorage.getItem('pfc_last_user')||'';}catch(e){return '';}}
+function whoFromEmail(em){
+  var m=users().filter(function(u){return u.email.toLowerCase()===String(em||'').toLowerCase();})[0];
+  return m?m.name:(em||'?');
+}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function num(v){if(v===null||v===undefined||v==='')return null;var n=Number(String(v).replace(',','.'));return isFinite(n)?n:null;}
 function N(v){return Number(v)||0;}
@@ -299,25 +305,20 @@ function titleBlock(sub){return '<header><h1>Revente Jean-Bouin</h1><p class="su
 
 function setupView(){
   return titleBlock('Configuration à terminer')+'<section class="panel"><h2>Il manque la configuration</h2>'+
-    '<p>Ouvre le fichier <strong>config.js</strong> et renseigne l’adresse e-mail du compte commun. Les étapes sont dans <strong>LISEZMOI.md</strong>.</p></section>';
+    '<p>Ouvre le fichier <strong>config.js</strong> et renseigne les comptes utilisateurs (USERS). Les étapes sont dans <strong>LISEZMOI.md</strong>.</p></section>';
 }
 function loginView(){
-  return titleBlock('Abonnement Paris FC · accès partagé')+'<form class="panel" id="login-form"><h2>Mot de passe commun</h2>'+
+  var last=lastUser();
+  var opts=users().map(function(u){return '<option value="'+esc(u.email)+'"'+(u.email===last?' selected':'')+'>'+esc(u.name)+'</option>';}).join('');
+  return titleBlock('Abonnement Paris FC · accès privé')+'<form class="panel" id="login-form"><h2>Connexion</h2>'+
+    '<div class="fld"><label for="usr">Qui es-tu ?</label><select id="usr">'+opts+'</select></div>'+
     '<div class="fld"><label for="pw">Mot de passe</label><input id="pw" type="password" autocomplete="current-password" required></div>'+
     (loginErr?'<p class="msg-err" role="alert">'+esc(loginErr)+'</p>':'')+
     '<button type="submit" class="btn">Entrer</button></form>';
 }
-function whoView(){
-  return titleBlock('Abonnement Paris FC · accès partagé')+'<form class="panel" id="who-form"><h2>Qui es-tu ?</h2>'+
-    '<p class="sub">Ton prénom s’affiche sur les modifications que tu fais, pour que l’autre sache qui a posté ou baissé le prix.</p>'+
-    '<div class="fld"><label for="who">Prénom</label><input id="who" type="text" maxlength="30" autocomplete="given-name" value="'+esc(who||'')+'" required></div>'+
-    '<button type="submit" class="btn">Continuer</button></form>';
-}
-
 function render(){
   if(state==='setup'){app.innerHTML=setupView();return;}
   if(state==='login'){app.innerHTML=loginView();var pw=document.getElementById('pw');if(pw)pw.focus();return;}
-  if(state==='who'){app.innerHTML=whoView();var wh=document.getElementById('who');if(wh)wh.focus();return;}
   var today=parisToday();
   var rows=matches.filter(function(m){return m&&m.date;}).map(function(m){return {m:m,J:daysBetween(today,m.date)};}).filter(function(r){return r.J>=0;});
   rows.forEach(function(r){r.p=plan(r.m,r.J);});
@@ -346,7 +347,7 @@ function render(){
     h+=settings();
     h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';
   }
-  h+='<p class="note">Connecté en tant que <strong>'+esc(who||'?')+'</strong> · <button type="button" class="link" data-act="rename">changer de prénom</button> · <button type="button" class="link" data-act="logout">se déconnecter</button></p>';
+  h+='<p class="note">Connecté en tant que <strong>'+esc(who||'?')+'</strong> · <button type="button" class="link" data-act="logout">se déconnecter</button></p>';
   app.innerHTML=h;
 }
 
@@ -411,7 +412,6 @@ async function startApp(){
   }
 }
 async function afterLogin(){
-  if(!who){state='who';render();return;}
   await startApp();
 }
 async function logout(){
@@ -454,7 +454,6 @@ app.addEventListener('click',async function(e){
     return;
   }
   if(act==='logout'){await logout();return;}
-  if(act==='rename'){who=null;try{localStorage.removeItem('pfc_who');}catch(x){}state='who';render();return;}
   if(act==='retry'){await startApp();return;}
   if(!db||state!=='ok')return;
   if(act==='check'){patchCfg({lastCheck:new Date().toISOString(),lastCheckBy:who});toast('Vérification notée.');return;}
@@ -488,17 +487,15 @@ app.addEventListener('submit',async function(e){
   if(f.id==='login-form'){
     var pw=document.getElementById('pw').value;if(!pw)return;
     var btn=f.querySelector('button[type="submit"]');if(btn)btn.disabled=true;
-    try{await auth.signInWithEmailAndPassword(CFGX.SHARED_EMAIL,pw);}
+    var em=document.getElementById('usr').value;selUser=em;
+    try{await auth.signInWithEmailAndPassword(em,pw);}
     catch(err){
       loginErr=/credential|password|user-not-found|invalid/i.test(err.code||'')?'Mot de passe incorrect.':'Connexion impossible : '+(err.message||err.code);
       render();return;
     }
+    who=whoFromEmail(em);
+    try{localStorage.setItem('pfc_last_user',em);}catch(x){}
     loginErr='';await afterLogin();
-  }else if(f.id==='who-form'){
-    var n=document.getElementById('who').value.trim();if(!n)return;
-    who=n.slice(0,30);
-    try{localStorage.setItem('pfc_who',who);}catch(x){}
-    await startApp();
   }
 });
 app.addEventListener('toggle',function(e){
@@ -511,7 +508,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)refr
 /* ---------- démarrage ---------- */
 function configured(){
   function ok(v){return v&&String(v).indexOf('VOTRE')<0;}
-  return !!CFGX.FIREBASE&&ok(CFGX.FIREBASE.apiKey)&&ok(CFGX.SHARED_EMAIL);
+  return !!CFGX.FIREBASE&&ok(CFGX.FIREBASE.apiKey)&&users().length>0;
 }
 (function init(){
   if(!configured()){state='setup';render();return;}
@@ -523,7 +520,7 @@ function configured(){
   var first=true;
   auth.onAuthStateChanged(function(u){
     if(!first)return;first=false;
-    if(u){afterLogin();}else{state='login';render();}
+    if(u){who=whoFromEmail(u.email);afterLogin();}else{state='login';render();}
   });
 })();
 })();
