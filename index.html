@@ -138,6 +138,26 @@ tr.tot th,tr.tot td{font-weight:700;border-top:2px solid var(--line)}
 .vlist{display:flex;flex-direction:column;gap:14px}
 .vrow{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--line)}
 .vrow:first-child{border-top:0;padding-top:0}
+.roih{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.roip{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.roip .big{font-size:44px}
+.roip .big.ok{color:var(--good)}
+.bar{display:block;height:14px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:999px;min-width:2px}
+.bar>i.ok{background:var(--good)}
+.rchart{width:100%;height:auto;max-height:240px;display:block}
+.rchart .g{stroke:var(--line);stroke-width:1}
+.rchart .yl{fill:var(--muted);font:10px var(--f-body);text-anchor:middle}
+.rchart .ln{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round}
+.rchart .ar{fill:var(--accent);opacity:.14}
+.rchart .cost{stroke:var(--crit);stroke-width:1.5;stroke-dasharray:5 4}
+.rchart .cl{fill:var(--crit);font:600 10px var(--f-body)}
+.rchart .dt{fill:var(--accent);stroke:var(--bg);stroke-width:1.5}
+.rchart .be{fill:none;stroke:var(--good);stroke-width:2.5}
+.cmp{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.cmp li{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr) 3.2em;gap:10px;align-items:center}
+.cmp b{text-align:right;font-variant-numeric:tabular-nums}
+.cmpl{font-size:13px;color:var(--muted)}
 .verdict{font-size:18px;line-height:1.3}
 .warn-n{color:var(--warn)}
 .src{display:inline-block;align-self:flex-start;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
@@ -184,6 +204,7 @@ window.PFC_CONFIG = {
 };
 </script>
 <script>
+
 (function(){
 'use strict';
 var CFGX=window.PFC_CONFIG||{};
@@ -194,7 +215,7 @@ var DEF={basePrice:null,markup:0,drop7:10,drop3:20,floorPct:50,watchFrom:21,last
 var STATUS=[['attente','Pas encore ouverte'],['ouverte','Ouverte, à poster'],['enligne','En vente'],['vendue','Vendue'],['pretee','Prêtée'],['nonvendue','Non vendue'],['gardee','Je garde']];
 var STATUS_LABEL={};STATUS.forEach(function(s){STATUS_LABEL[s[0]]=s[1];});
 
-var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set(), ventes=[], transfers=[], tab='matchs';
+var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set(), ventes=[], transfers=[], abos=[], tab='matchs';
 var state='boot', loginErr='', errMsg='', who=null;
 var toastTimer=null, pending=false, pollTimer=null, debounce=null;
 var app=document.getElementById('app');
@@ -520,6 +541,71 @@ function balanceView(){
   }
   return h+'</section>';
 }
+
+/* ---------- rentabilité de l'abonnement ---------- */
+var MOIS=['Janv','Févr','Mars','Avr','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'];
+function seasonStart(s){var y=Number(String(s).slice(0,4));return Date.UTC(y,7,1);}
+function seasonEnd(s){var y=Number(String(s).slice(0,4));return Date.UTC(y+1,6,31);}
+function roiOf(abo){
+  var n=Math.max(1,sellers().length),sales=ventes.filter(function(v){return seasonOf(v.date)===abo.season;}).sort(function(x,y){return String(x.date).localeCompare(String(y.date));});
+  var net=0,pend=0;sales.forEach(function(v){net+=netOf(v);if(v.reglement==='attente')pend+=netOf(v);});
+  var share=r2(net/n);
+  return {abo:abo,sales:sales,net:net,share:share,pend:r2(pend/n),n:n,pct:abo.amount>0?share/abo.amount*100:0,left:r2(abo.amount-share)};
+}
+function roiChart(R){
+  var W=340,H=190,L=40,Rr=10,T=14,B=26,pw=W-L-Rr,ph=H-T-B,s=R.abo.season,t0=seasonStart(s),t1=seasonEnd(s),cost=R.abo.amount,n=R.n;
+  var todayT=Date.parse(parisToday()+'T00:00:00Z'),tEnd=Math.min(Math.max(todayT,t0),t1);
+  var cum=0,pts=[[t0,0]],dots=[],be=null;
+  R.sales.forEach(function(v){var t=Date.parse(v.date+'T00:00:00Z');pts.push([t,cum]);cum+=netOf(v)/n;pts.push([t,cum]);dots.push({t:t,c:cum});if(be===null&&cost>0&&cum>=cost)be={t:t,c:cum};});
+  pts.push([Math.max(tEnd,pts[pts.length-1][0]),cum]);
+  var ymax=Math.max(cost,cum)*1.15||100;
+  function X(t){return L+(t-t0)/(t1-t0)*pw;}function Y(c){return T+ph-c/ymax*ph;}
+  var d=pts.map(function(p,i){return (i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1);}).join(' ');
+  var last=pts[pts.length-1],area=d+' L'+X(last[0]).toFixed(1)+' '+Y(0).toFixed(1)+' L'+X(t0).toFixed(1)+' '+Y(0).toFixed(1)+' Z';
+  var g='',ticks=[0,0.5,1].map(function(f){return cost*f;});if(!cost)ticks=[0,ymax/2];
+  ticks.forEach(function(c){g+='<line class="g" x1="'+L+'" x2="'+(W-Rr)+'" y1="'+Y(c).toFixed(1)+'" y2="'+Y(c).toFixed(1)+'"/><text class="yl" x="'+(L-5)+'" y="'+(Y(c)+3).toFixed(1)+'" text-anchor="end">'+Math.round(c)+' €</text>';});
+  var xl='';for(var k=0;k<12;k++){var mo=(7+k)%12,yr=Number(s.slice(0,4))+(7+k>11?1:0),tt=Date.UTC(yr,mo,1);var x=X(tt).toFixed(1);xl+='<line class="g" x1="'+x+'" x2="'+x+'" y1="'+(T+ph)+'" y2="'+(T+ph+3)+'"/>'+(k%3===0?'<text class="yl" x="'+x+'" y="'+(H-8)+'">'+MOIS[mo]+'</text>':'');}
+  var cl=cost?'<line class="cost" x1="'+L+'" x2="'+(W-Rr)+'" y1="'+Y(cost).toFixed(1)+'" y2="'+Y(cost).toFixed(1)+'"/><text class="cl" x="'+(W-Rr)+'" y="'+(Y(cost)-4).toFixed(1)+'" text-anchor="end">Abonnement '+eur(cost)+'</text>':'';
+  var dt=dots.map(function(p){return '<circle class="dt" cx="'+X(p.t).toFixed(1)+'" cy="'+Y(p.c).toFixed(1)+'" r="3.5"/>';}).join('');
+  var bm=be?'<circle class="be" cx="'+X(be.t).toFixed(1)+'" cy="'+Y(cost).toFixed(1)+'" r="6"/>':'';
+  var lbl='Courbe de remboursement de l’abonnement '+s+' : '+eur(R.share)+' revendus sur '+eur(cost)+'.';
+  return '<svg class="rchart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(lbl)+'">'+g+xl+'<path class="ar" d="'+area+'"/>'+cl+'<path class="ln" d="'+d+'"/>'+dt+bm+'</svg>';
+}
+function roiCard(R){
+  var a=R.abo,done=R.share>=a.amount&&a.amount>0,pct=Math.min(100,R.pct);
+  var verdict=!a.amount?'Montant de l’abonnement à renseigner.':done?'Abonnement amorti : <b>+'+eur(r2(R.share-a.amount))+'</b> de gain.':'Il reste <b>'+eur(R.left)+'</b> à rembourser.';
+  var locked=a.source==='billetterie';
+  var h='<section class="panel roi" aria-label="Rentabilité '+esc(a.person)+' '+esc(a.season)+'"><div class="roih"><h2>Saison '+esc(a.season)+' · '+esc(a.person)+'</h2>'+(locked?'<span class="src bil"><span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> Commande n° '+esc(a.ref||'?')+' · billetterie</span>':'<span class="src man">Saisi à la main'+(a.by?' par '+esc(a.by):'')+'</span>')+'</div>'+
+    '<div class="roip"><b class="big'+(done?' ok':'')+'">'+Math.round(R.pct)+' %</b><span class="cap">de l’abonnement remboursé</span></div>'+
+    '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(pct)+'"><i class="'+(done?'ok':'')+'" style="width:'+pct.toFixed(1)+'%"></i></div>'+
+    '<p class="verdict">'+verdict+'</p>'+
+    '<div class="kpis"><div><span class="cap">Abonnement</span><b class="big">'+eur(a.amount)+'</b></div><div><span class="cap">Part revendue</span><b class="big">'+eur(R.share)+'</b></div><div><span class="cap">Paires vendues</span><b class="big">'+R.sales.length+'</b></div></div>'+
+    roiChart(R)+
+    '<p class="note">Part revendue = net des reventes de la saison ÷ '+R.n+' personnes (la recette est partagée à parts égales).'+(R.pend>0?' Dont '+eur(R.pend)+' en attente de règlement par le club.':'')+'</p>';
+  if(!locked)h+='<button type="button" class="btn ghost small" data-act="delabo" data-id="'+esc(a.id)+'">Supprimer cet abonnement</button>';
+  return h+'</section>';
+}
+function roiView(){
+  var h='';
+  var rs=abos.map(roiOf);
+  if(rs.length>1){
+    h+='<section class="panel" aria-labelledby="h-roi"><h2 id="h-roi">Rentabilité par saison</h2><ul class="cmp">'+rs.map(function(R){var p=Math.min(100,R.pct);return '<li><span class="cmpl">'+esc(R.abo.season)+' · '+esc(R.abo.person)+'</span><span class="bar"><i class="'+(R.share>=R.abo.amount&&R.abo.amount>0?'ok':'')+'" style="width:'+p.toFixed(1)+'%"></i></span><b>'+Math.round(R.pct)+' %</b></li>';}).join('')+'</ul></section>';
+  }
+  if(!rs.length)h+='<section class="panel"><h2>Rentabilité de l’abonnement</h2><p class="sub">Ajoute le montant d’un abonnement pour suivre son remboursement par les reventes.</p></section>';
+  rs.forEach(function(R){h+=roiCard(R);});
+  var seasons={};ventes.forEach(function(v){seasons[seasonOf(v.date)]=1;});
+  var missing=[];Object.keys(seasons).sort().reverse().forEach(function(s){sellers().forEach(function(p){if(!abos.some(function(x){return x.season===s&&x.person===p;}))missing.push(p+' ('+s+')');});});
+  var opts=Object.keys(seasons).sort().reverse();if(!opts.length)opts=[seasonOf(parisToday())];
+  h+='<details class="panel set" data-key="addabo"'+(openSet.has('addabo')?' open':'')+'><summary><span class="h2">Ajouter un abonnement</span><span class="chev" aria-hidden="true"></span></summary>'+
+    (missing.length?'<p class="note">À renseigner : '+esc(missing.join(', '))+'.</p>':'')+
+    '<form id="abo-form" style="display:flex;flex-direction:column;gap:12px;margin-top:12px"><div class="grid">'+
+    '<div class="fld"><label for="a-season">Saison</label><select id="a-season">'+opts.map(function(s){return '<option>'+esc(s)+'</option>';}).join('')+'</select></div>'+
+    '<div class="fld"><label for="a-person">Abonné</label><select id="a-person">'+selOpts(who,false)+'</select></div>'+
+    '<div class="fld"><label for="a-amt">Montant payé (€)</label><input id="a-amt" type="number" inputmode="decimal" step="0.01" min="0" required></div>'+
+    '<div class="fld"><label for="a-ref">N° de commande</label><input id="a-ref" type="text"></div></div>'+
+    '<button type="submit" class="btn">Enregistrer l’abonnement</button></form></details>';
+  return h;
+}
 function financeView(){
   var list=sortedVentes();
   var tot=list.reduce(function(a,v){a.brut+=v.price;a.fee+=v.fee;a.net+=netOf(v);return a;},{brut:0,fee:0,net:0});
@@ -527,6 +613,7 @@ function financeView(){
     '<div class="kpis"><div><span class="cap">Net encaissé</span><b class="big">'+eur(tot.net)+'</b></div><div><span class="cap">Par personne</span><b class="big">'+eur(tot.net/2)+'</b></div><div><span class="cap">Ventes</span><b class="big">'+list.length+'</b></div></div>'+
     '<button type="button" class="btn" data-act="export"'+(list.length?'':' disabled')+'>Exporter en Excel</button>'+
     '<p class="note">Une vente = une paire de places. Le net est le prix de vente moins la commission du club ; « par personne » est la moitié du net. Saison du 1er août au 31 juillet, année fiscale = année civile.</p></section>';
+  h+=roiView();
   h+=balanceView();
   var opts='<option value="">Autre / hors liste</option>'+matches.map(function(m){return '<option value="'+esc(m.id)+'">'+esc('Paris FC – '+m.opp+' ('+m.date+')')+'</option>';}).join('');
   h+='<details class="panel set" data-key="addv"'+(openSet.has('addv')||!list.length?' open':'')+'><summary><span class="h2">Ajouter une vente</span><span class="chev" aria-hidden="true"></span></summary>'+
@@ -665,6 +752,16 @@ function exportXlsx(){
       p(5,{t:'n',v:r.bal,f:'B'+R+'-D'+R+'+E'+R+'-C'+R,z:EUR});});
     dc['!ref']='A1:F'+(ub+1);dc['!cols']=[{wch:14},{wch:16},{wch:14},{wch:16},{wch:16},{wch:22}];
     X.utils.book_append_sheet(wb,dc,'Décompte');X.utils.book_append_sheet(wb,tv,'Virements');
+    var rr=abos.map(roiOf),ro={};['Saison','Abonné','Abonnement payé','Net revendu (saison)','Part revendue','Reste à rembourser','Taux de remboursement','Origine','N° de commande'].forEach(function(h,c){ro[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
+    rr.forEach(function(R,i){var r=i+1,RW=i+2;function p(c,cell){ro[X.utils.encode_cell({r:r,c:c})]=cell;}
+      p(0,{t:'s',v:R.abo.season});p(1,{t:'s',v:R.abo.person});p(2,{t:'n',v:R.abo.amount,z:EUR});
+      p(3,{t:'n',v:R.net,f:'SUMIF('+vr('C')+',A'+RW+','+vr('G')+')',z:EUR});
+      p(4,{t:'n',v:R.share,f:'D'+RW+'/'+R.n,z:EUR});
+      p(5,{t:'n',v:R.abo.amount-R.share,f:'C'+RW+'-E'+RW,z:EUR});
+      p(6,{t:'n',v:R.abo.amount?R.share/R.abo.amount:0,f:'IF(C'+RW+'>0,E'+RW+'/C'+RW+',0)',z:'0%'});
+      p(7,{t:'s',v:R.abo.source==='billetterie'?'Billetterie':'Saisie manuelle'});p(8,{t:'s',v:R.abo.ref||''});});
+    ro['!ref']='A1:I'+(rr.length+1);ro['!cols']=[{wch:10},{wch:12},{wch:16},{wch:18},{wch:14},{wch:18},{wch:20},{wch:16},{wch:14}];
+    X.utils.book_append_sheet(wb,ro,'Rentabilité');
   })();
   X.writeFile(wb,'revente-pfc-ventes-'+parisToday()+'.xlsx',{cellDates:true});
   toast('Fichier Excel généré.');
@@ -684,6 +781,7 @@ var SEED=[['m01','Angers','2026-11-22','15:00',false],['m02','Le Mans','2026-12-
 ['m04','Toulouse','2027-01-17','15:00',false],['m05','Auxerre','2027-01-30','20:45',false],['m06','Troyes','2027-02-13',null,true],
 ['m07','Brest','2027-03-06',null,true],['m08','Lorient','2027-03-13',null,true],['m09','PSG','2027-04-03',null,true],
 ['m10','Lens','2027-04-24',null,true],['m11','Lille','2027-05-08',null,true],['m12','Marseille','2027-05-22',null,true]];
+function aref(){return db.collection('revente_config').doc('abonnements');}
 function vref(){return db.collection('revente_config').doc('ventes');}
 function mref(){return db.collection('revente_matches');}
 function cref(){return db.collection('revente_config').doc('main');}
@@ -715,6 +813,9 @@ async function reload(){
     if(!r.sellerSrc)r.sellerSrc=r.seller&&/^vlot/.test(k)?'billetterie':'manuel';
     if(!r.reglement)r.reglement='verse';
     return r;});
+  try{var ad=await aref().get();var am=(ad.exists&&ad.data().a)||{};
+    abos=Object.keys(am).map(function(k){var r=am[k];r.id=k;r.amount=num(r.amount)||0;return r;}).sort(function(x,y){return String(y.season).localeCompare(String(x.season))||String(x.person).localeCompare(String(y.person));});
+  }catch(e){abos=[];}
   var tm=(vd.exists&&vd.data().t)||{};
   transfers=Object.keys(tm).map(function(k){var r=tm[k];r.id=k;r.amount=num(r.amount)||0;return r;}).sort(function(x,y){return String(y.date).localeCompare(String(x.date));});
   var mig={},nm=0;
@@ -787,6 +888,14 @@ app.addEventListener('click',async function(e){
   var t=e.target.closest('[data-act]');if(!t)return;
   var act=t.dataset.act,id=t.dataset.id;
   if(act==='theme'){var d=!isDark();if(d)document.documentElement.setAttribute('data-theme','dark');else document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('pfc-theme',d?'dark':'light');}catch(_){}var mt=document.querySelector('meta[name=theme-color]');if(mt)mt.content=d?'#0a111e':'#1c4fd8';t.setAttribute('aria-checked',d);var l=t.querySelector('.swl');if(l)l.textContent=d?'Sombre':'Clair';return;}
+  if(act==='delabo'){
+    var da=abos.filter(function(x){return x.id===id;})[0];
+    if(da&&da.source==='billetterie'){toast('Verrouillé : abonnement récupéré depuis la billetterie.');return;}
+    abos=abos.filter(function(x){return x.id!==id;});render();
+    try{await aref().update('a.'+id,firebase.firestore.FieldValue.delete());}
+    catch(e){if(isAuthError(e)){await logout();return;}toast('Suppression impossible : '+(e.message||e.code));await refresh();}
+    return;
+  }
   if(act==='deltr'){
     transfers=transfers.filter(function(x){return x.id!==id;});render();
     try{await vref().update('t.'+id,firebase.firestore.FieldValue.delete());}
@@ -856,6 +965,17 @@ app.addEventListener('submit',async function(e){
     openSet.delete('addv');
     await newSale({date:d,label:label,matchId:mid||null,price:document.getElementById('v-price').value,fee:document.getElementById('v-fee').value,note:document.getElementById('v-note').value.trim(),seller:document.getElementById('v-seller').value});
     toast('Vente enregistrée.');return;
+  }
+  if(f.id==='abo-form'){
+    if(!db||state!=='ok')return;
+    var as=document.getElementById('a-season').value,ap=document.getElementById('a-person').value,am2=num(document.getElementById('a-amt').value);
+    if(!as||!ap||!am2||am2<=0){toast('Abonnement : choisis la saison, la personne et un montant.');return;}
+    var ar={id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),season:as,person:ap,amount:am2,ref:document.getElementById('a-ref').value.trim(),source:'manuel',by:who};
+    abos.push(ar);abos.sort(function(x,y){return String(y.season).localeCompare(String(x.season))||String(x.person).localeCompare(String(y.person));});openSet.delete('addabo');render();
+    var ao={};ao[ar.id]=ar;
+    try{await aref().set({a:ao},{merge:true});toast('Abonnement enregistré.');}
+    catch(e){if(isAuthError(e)){await logout();return;}toast('Enregistrement impossible : '+(e.message||e.code));await refresh();}
+    return;
   }
   if(f.id==='tr-form'){
     if(!db||state!=='ok')return;
@@ -927,4 +1047,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build lock -->
+<!-- build roi -->
