@@ -163,6 +163,10 @@ tr.tot th,tr.tot td{font-weight:700;border-top:2px solid var(--line)}
 .src{display:inline-block;align-self:flex-start;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
 .src.bil{background:var(--accent-soft);color:var(--accent)}
 .src.man{background:var(--warn-soft);color:var(--warn)}
+.vrow>.grid,.vrow>.note,.vrow>.btn{margin-top:10px}
+details.vrow>summary.vsum{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) 24px;gap:8px;cursor:pointer;align-items:center}
+details.vrow>summary.vsum::-webkit-details-marker{display:none}
+details.vrow[open]>summary .chev{transform:rotate(225deg);margin-top:3px}
 .vhead{display:flex;flex-direction:column;gap:2px}
 .fld select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:16px var(--f-body)}
 .fld input[type=date]{min-width:0}
@@ -647,14 +651,14 @@ function financeView(){
     h+='<section class="panel" aria-labelledby="h-det"><h2 id="h-det">Détail des ventes</h2><div class="vlist">'+list.map(function(v){
       function f(label,field,val,type){return '<div class="fld"><label for="vf-'+field+'-'+esc(v.id)+'">'+label+'</label><input id="vf-'+field+'-'+esc(v.id)+'"'+(lockedVente(v,field)?' disabled':'')+' type="'+type+'" '+(type==='number'?'inputmode="decimal" step="0.01" min="0" ':'')+'data-vf="'+field+'" data-vid="'+esc(v.id)+'" value="'+esc(val==null?'':val)+'"></div>';}
       var vl=v.source==='billetterie';
-      return '<div class="vrow'+(vl?' vlocked':'')+'"><div class="vhead"><b>'+(vl?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> ':'')+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOf(v.date))+' · net '+eur(netOf(v))+'</span>'+
+      return '<details class="vrow'+(vl?' vlocked':'')+'" data-key="vd-'+esc(v.id)+'"'+(openSet.has('vd-'+v.id)?' open':'')+'><summary class="vsum"><div class="vhead"><b>'+(vl?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> ':'')+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOf(v.date))+' · net '+eur(netOf(v))+'</span>'+
         '<span class="src '+(v.source==='billetterie'?'bil':'man')+'">'+esc(srcLabel(v))+'</span>'+
         '<span class="muted">Vendu par (a reçu le virement) : <b>'+esc(sellerLabel(v))+'</b></span>'+
-        '<span class="src '+(v.reglement==='attente'?'man':'bil')+'">'+(v.reglement==='attente'?'Règlement du club en attente':'Règlement versé')+'</span></div>'+
+        '<span class="src '+(v.reglement==='attente'?'man':'bil')+'">'+(v.reglement==='attente'?'Règlement du club en attente':'Règlement versé')+'</span></div><span class="chev" aria-hidden="true"></span></summary>'+
         '<div class="grid">'+f('Date','date',v.date,'date')+f('Prix (€)','price',v.price,'number')+f('Commission (€)','fee',v.fee,'number')+f('Libellé','label',v.label,'text')+
           '<div class="fld"><label for="vf-seller-'+esc(v.id)+'">Vendu par</label><select id="vf-seller-'+esc(v.id)+'"'+(lockedVente(v,'seller')?' disabled':'')+' data-vf="seller" data-vid="'+esc(v.id)+'">'+selOpts(v.seller,true)+'</select></div>'+
           '<div class="fld"><label for="vf-reglement-'+esc(v.id)+'">Règlement du club</label><select id="vf-reglement-'+esc(v.id)+'" data-vf="reglement" data-vid="'+esc(v.id)+'"><option value="verse"'+(v.reglement!=='attente'?' selected':'')+'>Versé</option><option value="attente"'+(v.reglement==='attente'?' selected':'')+'>En attente</option></select></div></div>'+
-        (vl?'<p class="note">Verrouillé : montants et vendeur récupérés depuis la billetterie. Seul le statut du règlement reste modifiable.</p>':'<button type="button" class="btn ghost small" data-act="delvente" data-id="'+esc(v.id)+'">Supprimer cette vente</button>')+'</div>';
+        (vl?'<p class="note">Verrouillé : montants et vendeur récupérés depuis la billetterie. Seul le statut du règlement reste modifiable.</p>':'<button type="button" class="btn ghost small" data-act="delvente" data-id="'+esc(v.id)+'">Supprimer cette vente</button>')+'</details>';
     }).join('')+'</div></section>';
   }
   return h;
@@ -1062,4 +1066,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build check -->
+<!-- build detail-compact -->
