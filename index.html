@@ -72,7 +72,8 @@ details.fx>summary::-webkit-details-marker{display:none}
 .stub b{font-size:32px;line-height:1;font-weight:700}
 .stub i{font-style:normal;text-transform:uppercase;font-size:13px;letter-spacing:.08em;color:var(--muted)}
 .main{padding:12px;min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center}
-.opp{font-family:var(--f-display);font-size:24px;line-height:1.05;font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+.clogo{width:26px;height:26px;object-fit:contain;flex:none}
+.opp{display:inline-flex;align-items:center;gap:8px;font-family:var(--f-display);font-size:24px;line-height:1.05;font-weight:600;text-transform:uppercase;letter-spacing:.02em}
 .meta{font-size:13px;color:var(--muted)}
 .j{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
 .side{padding:12px 0 12px 4px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:3px;text-align:right}
@@ -308,6 +309,8 @@ function lockFull(m){return !!(m.date&&m.date<parisToday()&&m.status==='vendue'&
 function lockFin(m){var s=saleOf(m);return !lockFull(m)&&!!(s&&s.source==='billetterie');}
 function lockedVente(v,ff){if(v.source!=='billetterie')return false;if(ff==='seller')return v.sellerSrc==='billetterie';return ff==='date'||ff==='price'||ff==='fee'||ff==='label';}
 /* ---------- vues ---------- */
+var LOGOS={'angers':'2026/06/angers_sco.png','le mans':'2026/06/le_mans_fc_2.png','le havre':'2026/06/havre_ac.png','toulouse':'2026/06/toulouse_fc.png','auxerre':'2026/06/aj_auxerre.png','troyes':'2026/06/estac_troyes_2.png','brest':'2026/04/stade_brestois_29.png','lorient':'2026/04/fc_lorient.png','psg':'2026/04/paris_saint_germain.png','lens':'2026/04/rc_lens.png','lille':'2026/04/losc_lille.png','marseille':'2026/06/olympique_de_marseille_1.png','nice':'2026/06/ogc_nice.png','lyon':'2026/06/olympique_lyonnais.png','strasbourg':'2026/06/rc_strasbourg_alsace.png','rennes':'2026/06/stade_rennais_fc.png','monaco':'2026/06/as_monaco_fc.png','montpellier':'2026/11/montpellier_fc_f.png'};
+function logoImg(opp){var k=String(opp||'').trim().toLowerCase(),f=LOGOS[k];return f?'<img class="clogo" src="'+'https://billetterie.parisfc.fr/media/'+f+'" alt="" width="26" height="26" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">':'';}
 function card(r){
   var m=r.m,J=r.J,p=r.p,id=esc(m.id),st=stubParts(m),listed=num(m.listed);
   var isPast=J<0;
@@ -351,13 +354,13 @@ function card(r){
   if(lockF){
     return '<div class="fx past locked" id="fx-'+id+'" aria-label="Match verrouillé : vendu, informations enregistrées">'+
       '<div class="sum"><span class="stub"><b>'+st.day+'</b><i>'+esc(st.mon)+'</i></span>'+
-      '<span class="main"><span class="opp">'+esc(m.opp)+'</span><span class="meta">'+esc(whenLabel(m))+' · <span class="j">'+jLabel(J)+'</span></span></span>'+
+      '<span class="main"><span class="opp">'+logoImg(m.opp)+'<span>'+esc(m.opp)+'</span></span><span class="meta">'+esc(whenLabel(m))+' · <span class="j">'+jLabel(J)+'</span></span></span>'+
       '<span class="side"><span class="pill s-'+esc(m.status)+'">'+esc(STATUS_LABEL[m.status]||m.status)+'</span><span class="px">'+esc(px)+'</span>'+(cap?'<span class="cap">'+esc(cap)+'</span>':'')+'</span>'+
       '<span class="lock" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span></div></div>';
   }
   return '<details class="fx'+(isPast?' past':'')+'" id="fx-'+id+'" data-key="'+id+'"'+(openSet.has(m.id)?' open':'')+'>'+
     '<summary><span class="stub"><b>'+st.day+'</b><i>'+esc(st.mon)+'</i></span>'+
-    '<span class="main"><span class="opp">'+esc(m.opp)+'</span><span class="meta">'+esc(whenLabel(m))+' · <span class="j">'+jLabel(J)+'</span></span></span>'+
+    '<span class="main"><span class="opp">'+logoImg(m.opp)+'<span>'+esc(m.opp)+'</span></span><span class="meta">'+esc(whenLabel(m))+' · <span class="j">'+jLabel(J)+'</span></span></span>'+
     '<span class="side"><span class="pill s-'+esc(m.status)+'">'+(lockN?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span>':'')+esc(STATUS_LABEL[m.status]||m.status)+'</span><span class="px">'+esc(px)+'</span>'+(cap?'<span class="cap">'+esc(cap)+'</span>':'')+'</span>'+
     '<span class="chev" aria-hidden="true"></span></summary>'+
     '<div class="body"><div class="seg" role="group" aria-label="Statut de la revente pour '+esc(m.opp)+'">'+seg+'</div>'+planHtml+
@@ -1083,4 +1086,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build vue-simple -->
+<!-- build logos -->
