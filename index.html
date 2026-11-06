@@ -404,6 +404,17 @@ function learned(){
   return '<section class="panel stat" aria-labelledby="h-learn"><h2 id="h-learn">Quand la revente ouvre-t-elle ?</h2>'+body+'</section>';
 }
 
+function histo(){
+  var rows=matches.filter(function(m){return m.openedOn||m.listedOn||m.soldOn||saleOf(m);}).sort(function(a,b){return String(a.date).localeCompare(String(b.date));});
+  var jx=function(d,m){return d&&m.date?'J-'+daysBetween(d,m.date):'—';};
+  var body;
+  if(!rows.length)body='<p class="sub">Rien à afficher pour l’instant. Les dates se remplissent toutes seules quand vous changez le statut d’un match (ouverte, en vente, vendue).</p>';
+  else body='<div class="tbl"><table><thead><tr><th scope="col">Match</th><th scope="col">Revente ouverte</th><th scope="col">Mise en vente</th><th scope="col">Vendu</th><th scope="col">Délai</th><th scope="col">Prix affiché</th><th scope="col">Net final</th></tr></thead><tbody>'+rows.map(function(m){
+    var sl=saleOf(m),sold=m.soldOn||'',lag=(m.listedOn&&sold)?Math.max(0,daysBetween(m.listedOn,sold))+' j':'—';
+    return '<tr><th scope="row">'+esc(m.opp)+'</th><td>'+jx(m.openedOn,m)+'</td><td>'+jx(m.listedOn,m)+'</td><td>'+jx(sold,m)+'</td><td>'+lag+'</td><td>'+eur(m.firstListed!=null?m.firstListed:(m.listed||null))+'</td><td>'+(sl?eur(netOf(sl)):'—')+'</td></tr>';
+  }).join('')+'</tbody></table></div><p class="note">J-x = nombre de jours avant le match. Les matchs passés n’ont pas encore ces dates : elles se rempliront à partir des prochains matchs.</p>';
+  return '<section class="panel" aria-labelledby="h-histo"><h2 id="h-histo">Historique des reventes</h2>'+body+'</section>';
+}
 function lastCheckText(){
   if(!cfg.lastCheck)return 'Aucune vérification notée.';
   try{
@@ -460,7 +471,7 @@ function render(){
     h+='<section aria-labelledby="h-fx"><h2 id="h-fx" style="margin-bottom:10px">Matchs à domicile</h2><div class="fixtures">'+
       (rows.length?rows.map(card).join(''):'<p class="panel sub">Aucun match enregistré.</p>')+'</div></section>';
     if(fullView&&past.length)h+='<section aria-labelledby="h-past"><h2 id="h-past" style="margin-bottom:10px">Matchs passés ('+past.length+')</h2><div class="fixtures">'+past.map(card).join('')+'</div></section>';
-    if(fullView){h+=learned();
+    if(fullView){h+=learned();h+=histo();
     h+=settings();
     h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';}
   }
@@ -962,15 +973,19 @@ app.addEventListener('click',async function(e){
     var v=t.dataset.v,patch={status:v},prev=m.status;
     if(m.status==='attente'&&(v==='ouverte'||v==='enligne')&&!m.openedOn)patch.openedOn=parisToday();
     if(v==='enligne'&&m.status!=='enligne')patch.postedBy=who;
+    if(v==='enligne'&&!m.listedOn)patch.listedOn=parisToday();
+    if(v==='vendue'&&!m.soldOn)patch.soldOn=parisToday();
     patchMatch(id,patch);
     if(v==='vendue'&&prev!=='vendue')ensureSale(m);
   }else if(act==='posted'){
     var p2={status:'enligne',listed:Number(t.dataset.v)};
     if(!m.openedOn)p2.openedOn=parisToday();
     if(m.status!=='enligne')p2.postedBy=who;
+    if(!m.listedOn)p2.listedOn=parisToday();
+    if(m.firstListed==null)p2.firstListed=Number(t.dataset.v);
     patchMatch(id,p2);
   }else if(act==='sold'){
-    patchMatch(id,{status:'vendue'});
+    patchMatch(id,m.soldOn?{status:'vendue'}:{status:'vendue',soldOn:parisToday()});
     ensureSale(m);
   }
 });
@@ -1086,4 +1101,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build abo-sylvain -->
+<!-- build historique -->
