@@ -583,7 +583,7 @@ function roiCard(R){
   var a=R.abo,done=R.share>=a.amount&&a.amount>0,pct=Math.min(100,R.pct);
   var verdict=!a.amount?'Montant de l’abonnement à renseigner.':done?'Abonnement amorti : <b>+'+eur(r2(R.share-a.amount))+'</b> de gain.':'Il reste <b>'+eur(R.left)+'</b> à rembourser.';
   var locked=a.source==='billetterie';
-  var h='<section class="panel roi" aria-label="Rentabilité '+esc(a.person)+' '+esc(a.season)+'"><div class="roih"><h2>Saison '+esc(a.season)+' · '+esc(a.person)+'</h2>'+(locked?'<span class="src bil"><span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> Commande n° '+esc(a.ref||'?')+' · billetterie</span>':'<span class="src man">Saisi à la main'+(a.by?' par '+esc(a.by):'')+'</span>')+'</div>'+
+  var h='<section class="panel roi" aria-label="Rentabilité '+esc(a.person)+' '+esc(a.season)+'"><div class="roih"><h2>Saison '+esc(a.season)+' · '+esc(a.person)+'</h2>'+(locked?'<span class="src bil"><span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> Commande n° '+esc(a.ref||'?')+' · billetterie</span>':'<span class="src man">Informations saisies manuellement'+(a.by?' (par '+esc(a.by)+')':'')+'</span>')+'</div>'+
     '<div class="roip"><b class="big'+(done?' ok':'')+'">'+Math.round(R.pct)+' %</b><span class="cap">de l’abonnement remboursé</span></div>'+
     '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(pct)+'"><i class="'+(done?'ok':'')+'" style="width:'+pct.toFixed(1)+'%"></i></div>'+
     '<p class="verdict">'+verdict+'</p>'+
@@ -1086,4 +1086,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build logos -->
+<!-- build abo-sylvain -->
