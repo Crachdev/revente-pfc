@@ -124,6 +124,7 @@ button.link{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 form.panel .btn{width:100%}
 .fld input[type=text],.fld input[type=password]{min-height:48px}
 .tabs{display:flex;gap:6px}
+.vbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px}
 .tab{flex:1;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:600 15px var(--f-body);cursor:pointer}
 .tab[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
@@ -219,7 +220,7 @@ var DEF={basePrice:null,markup:0,drop7:10,drop3:20,floorPct:50,watchFrom:21,last
 var STATUS=[['attente','Pas encore ouverte'],['ouverte','Ouverte, à poster'],['enligne','En vente'],['vendue','Vendue'],['pretee','Prêtée'],['nonvendue','Non vendue'],['gardee','Je garde']];
 var STATUS_LABEL={};STATUS.forEach(function(s){STATUS_LABEL[s[0]]=s[1];});
 
-var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set(), ventes=[], transfers=[], abos=[], tab='matchs';
+var db=null, auth=null, unsubs=[], cfg=Object.assign({},DEF), matches=[], openSet=new Set(), ventes=[], transfers=[], abos=[], tab='matchs', fullView=(function(){try{return localStorage.getItem('pfc-view')==='full';}catch(_){return false;}})();
 var state='boot', loginErr='', errMsg='', who=null;
 var toastTimer=null, pending=false, pollTimer=null, debounce=null;
 var app=document.getElementById('app');
@@ -432,7 +433,7 @@ function render(){
   var past=matches.filter(function(m){return m&&m.date;}).map(function(m){return {m:m,J:daysBetween(today,m.date)};}).filter(function(r){return r.J<0;}).sort(function(a,b){return b.J-a.J;});
   var fin=(state==='ok'&&tab==='fin');
   var h=titleBlock(state==='ok'?rows.length+' matchs à domicile à venir · abonnement Paris FC':'Abonnement Paris FC');
-  if(state==='ok')h+=tabsNav();
+  if(state==='ok')h+=tabsNav()+viewBar();
   if(!fin)h+='<section class="panel" aria-labelledby="h-cta"><h2 id="h-cta">Revente ouverte quelque part ?</h2>'+
     '<p class="sub">Le filtre du site liste seulement les matchs dont la revente est ouverte.</p>'+
     '<a class="btn" href="'+URL_OPEN+'" target="_blank" rel="noopener">Voir les matchs à revente ouverte</a>'+
@@ -455,12 +456,12 @@ function render(){
     h+='</section>';
     h+='<section aria-labelledby="h-fx"><h2 id="h-fx" style="margin-bottom:10px">Matchs à domicile</h2><div class="fixtures">'+
       (rows.length?rows.map(card).join(''):'<p class="panel sub">Aucun match enregistré.</p>')+'</div></section>';
-    if(past.length)h+='<section aria-labelledby="h-past"><h2 id="h-past" style="margin-bottom:10px">Matchs passés ('+past.length+')</h2><div class="fixtures">'+past.map(card).join('')+'</div></section>';
-    h+=learned();
+    if(fullView&&past.length)h+='<section aria-labelledby="h-past"><h2 id="h-past" style="margin-bottom:10px">Matchs passés ('+past.length+')</h2><div class="fixtures">'+past.map(card).join('')+'</div></section>';
+    if(fullView){h+=learned();
     h+=settings();
-    h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';
+    h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';}
   }
-  if(state==='ok'){
+  if(state==='ok'&&fullView){
     h+='<details class="panel set" data-key="pw"'+(openSet.has('pw')?' open':'')+'><summary><span class="h2">Mon mot de passe</span><span class="chev" aria-hidden="true"></span></summary>'+
       '<form id="pw-form" style="display:flex;flex-direction:column;gap:12px">'+
       '<p class="note">Change le mot de passe de ton compte ('+esc(who||'')+'). Il faut saisir l’actuel pour confirmer.</p>'+
@@ -620,7 +621,22 @@ function checkView(){
   if(!it.length)return '<section class="panel" aria-label="Contrôle"><p class="note">✓ Rien à vérifier : les données sont complètes.</p></section>';
   return '<section class="panel" aria-labelledby="h-chk"><h2 id="h-chk">Données à vérifier</h2><ul class="note warn-n">'+it.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul></section>';
 }
+function viewBar(){
+  return '<div class="vbar"><span class="muted">'+(fullView?'Vue complète : toutes les fonctions':'Vue simple : l’essentiel')+'</span><button type="button" class="btn ghost small" data-act="view" aria-pressed="'+fullView+'">'+(fullView?'Passer à la vue simple':'Passer à la vue complète')+'</button></div>';
+}
+function financeSimple(){
+  var list=sortedVentes(),tot=list.reduce(function(a,v){return a+netOf(v);},0),b=balance(),rs=abos.map(roiOf);
+  var h='<section class="panel" aria-labelledby="h-fin"><h2 id="h-fin">En un coup d’œil</h2>'+
+    '<div class="kpis"><div><span class="cap">Net des reventes</span><b class="big">'+eur(tot)+'</b></div><div><span class="cap">Par personne</span><b class="big">'+eur(tot/Math.max(1,sellers().length))+'</b></div><div><span class="cap">Ventes</span><b class="big">'+list.length+'</b></div></div>';
+  var debt=b.rows.filter(function(r){return r.bal>0.005;}),cred=b.rows.filter(function(r){return r.bal<-0.005;});
+  var msg=!ventes.length?'Aucune vente pour l’instant.':(!debt.length?'Les comptes sont à jour.':(debt.length===1&&cred.length===1?'<b>'+esc(debt[0].n)+' doit '+eur(debt[0].bal)+' à '+esc(cred[0].n)+'.</b>':b.rows.map(function(r){return esc(r.n)+' : '+(r.bal>0?'doit '+eur(r.bal):r.bal<0?'doit recevoir '+eur(-r.bal):'à jour');}).join(' · ')));
+  h+='<p class="verdict">'+msg+'</p></section>';
+  h+=checkView();
+  if(rs.length)h+='<section class="panel" aria-labelledby="h-roi"><h2 id="h-roi">Rentabilité de l’abonnement</h2><ul class="cmp">'+rs.map(function(R){var p=Math.min(100,R.pct);return '<li><span class="cmpl">'+esc(R.abo.season)+' · '+esc(R.abo.person)+'</span><span class="bar"><i class="'+(R.share>=R.abo.amount&&R.abo.amount>0?'ok':'')+'" style="width:'+p.toFixed(1)+'%"></i></span><b>'+Math.round(R.pct)+' %</b></li>';}).join('')+'</ul><p class="note">'+rs.map(function(R){return esc(R.abo.person)+' : '+eur(R.share)+' récupérés sur '+eur(R.abo.amount)+(R.left>0?' (reste '+eur(R.left)+')':' (abonnement remboursé)');}).join(' · ')+'</p></section>';
+  return h;
+}
 function financeView(){
+  if(!fullView)return financeSimple();
   var list=sortedVentes();
   var tot=list.reduce(function(a,v){a.brut+=v.price;a.fee+=v.fee;a.net+=netOf(v);return a;},{brut:0,fee:0,net:0});
   var h='<section class="panel" aria-labelledby="h-fin"><h2 id="h-fin">Mes ventes</h2>'+
@@ -907,6 +923,7 @@ app.addEventListener('click',async function(e){
   var t=e.target.closest('[data-act]');if(!t)return;
   var act=t.dataset.act,id=t.dataset.id;
   if(act==='theme'){var d=!isDark();if(d)document.documentElement.setAttribute('data-theme','dark');else document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('pfc-theme',d?'dark':'light');}catch(_){}var mt=document.querySelector('meta[name=theme-color]');if(mt)mt.content=d?'#0a111e':'#1c4fd8';t.setAttribute('aria-checked',d);var l=t.querySelector('.swl');if(l)l.textContent=d?'Sombre':'Clair';return;}
+  if(act==='view'){fullView=!fullView;try{localStorage.setItem('pfc-view',fullView?'full':'simple');}catch(_){}render();return;}
   if(act==='delabo'){
     var da=abos.filter(function(x){return x.id===id;})[0];
     if(da&&da.source==='billetterie'){toast('Verrouillé : abonnement récupéré depuis la billetterie.');return;}
@@ -1066,4 +1083,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build detail-compact -->
+<!-- build vue-simple -->
