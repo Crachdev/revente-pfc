@@ -311,6 +311,45 @@ function lockedVente(v,ff){if(v.source!=='billetterie')return false;if(ff==='sel
 /* ---------- vues ---------- */
 var LOGOS={'angers':'2026/06/angers_sco.png','le mans':'2026/06/le_mans_fc_2.png','le havre':'2026/06/havre_ac.png','toulouse':'2026/06/toulouse_fc.png','auxerre':'2026/06/aj_auxerre.png','troyes':'2026/06/estac_troyes_2.png','brest':'2026/04/stade_brestois_29.png','lorient':'2026/04/fc_lorient.png','psg':'2026/04/paris_saint_germain.png','lens':'2026/04/rc_lens.png','lille':'2026/04/losc_lille.png','marseille':'2026/06/olympique_de_marseille_1.png','nice':'2026/06/ogc_nice.png','lyon':'2026/06/olympique_lyonnais.png','strasbourg':'2026/06/rc_strasbourg_alsace.png','rennes':'2026/06/stade_rennais_fc.png','monaco':'2026/06/as_monaco_fc.png','montpellier':'2026/11/montpellier_fc_f.png'};
 function logoImg(opp){var k=String(opp||'').trim().toLowerCase(),f=LOGOS[k];return f?'<img class="clogo" src="'+'https://billetterie.parisfc.fr/media/'+f+'" alt="" width="26" height="26" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">':'';}
+var STADE='Stade Jean-Bouin, 26 avenue du Général Sarrail, 75016 Paris';
+function parisOff(t){var p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Paris',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(t)),o={};p.forEach(function(x){o[x.type]=x.value;});return (Date.UTC(+o.year,+o.month-1,+o.day,(+o.hour)%24,+o.minute)-t)/60000;}
+function parisUtc(d,hh,mm){var a=String(d).split('-').map(Number),g=Date.UTC(a[0],a[1]-1,a[2],hh,mm),u=g-parisOff(g)*60000;u=g-parisOff(u)*60000;return new Date(u);}
+function icsStamp(dt){return dt.toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z');}
+function icsDay(d,plus){var a=String(d).split('-').map(Number),x=new Date(Date.UTC(a[0],a[1]-1,a[2]+(plus||0)));return x.toISOString().slice(0,10).replace(/-/g,'');}
+function evOf(m){
+  var timed=!m.weekend&&/^\d{1,2}:\d{2}$/.test(String(m.time||'')),title='Paris FC – '+m.opp,desc='Abonnement Paris FC. Pensez à vérifier si la revente est ouverte'+(m.weekend||!timed?' (horaire du match à confirmer).':'.');
+  var e={title:title,desc:desc,loc:STADE,uid:m.id+'@revente-pfc',timed:timed};
+  if(timed){var t=String(m.time).split(':').map(Number);e.start=parisUtc(m.date,t[0],t[1]);e.end=new Date(e.start.getTime()+2*3600000);}
+  else{e.day=icsDay(m.date,0);e.dayEnd=icsDay(m.date,1);}
+  var al=parisUtc(addDaysStr(m.date,-7),10,0);if(al.getTime()>Date.now())e.alarm=al;
+  return e;
+}
+function addDaysStr(d,n){var a=String(d).split('-').map(Number);return new Date(Date.UTC(a[0],a[1]-1,a[2]+n)).toISOString().slice(0,10);}
+function gcalUrl(m){
+  var e=evOf(m),dates=e.timed?icsStamp(e.start)+'/'+icsStamp(e.end):e.day+'/'+e.dayEnd;
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text='+encodeURIComponent(e.title)+'&dates='+dates+'&details='+encodeURIComponent(e.desc)+'&location='+encodeURIComponent(e.loc);
+}
+function icsEsc(t){return String(t).replace(/\\/g,'\\\\').replace(/;/g,'\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');}
+function icsFold(l){var o=[];while(l.length>72){o.push(l.slice(0,72));l=' '+l.slice(72);}o.push(l);return o.join('\r\n');}
+function buildIcs(list){
+  var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Revente PFC//FR','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:Paris FC à domicile'],now=icsStamp(new Date());
+  list.forEach(function(m){
+    var e=evOf(m);
+    L.push('BEGIN:VEVENT','UID:'+e.uid,'DTSTAMP:'+now);
+    if(e.timed){L.push('DTSTART:'+icsStamp(e.start),'DTEND:'+icsStamp(e.end));}
+    else{L.push('DTSTART;VALUE=DATE:'+e.day,'DTEND;VALUE=DATE:'+e.dayEnd);}
+    L.push('SUMMARY:'+icsEsc(e.title),'LOCATION:'+icsEsc(e.loc),'DESCRIPTION:'+icsEsc(e.desc));
+    if(e.alarm)L.push('BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+icsEsc('Vérifier si la revente est ouverte : '+e.title),'TRIGGER;VALUE=DATE-TIME:'+icsStamp(e.alarm),'END:VALARM');
+    L.push('END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  return L.map(icsFold).join('\r\n')+'\r\n';
+}
+function downloadIcs(list,name){
+  if(!list.length){toast('Aucun match à ajouter.');return;}
+  try{var b=new Blob([buildIcs(list)],{type:'text/calendar;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},4000);toast('Fichier agenda téléchargé : ouvre-le pour l’ajouter.');}
+  catch(e){toast('Téléchargement impossible sur cet appareil.');}
+}
 function card(r){
   var m=r.m,J=r.J,p=r.p,id=esc(m.id),st=stubParts(m),listed=num(m.listed);
   var isPast=J<0;
@@ -365,6 +404,7 @@ function card(r){
     '<span class="chev" aria-hidden="true"></span></summary>'+
     '<div class="body"><div class="seg" role="group" aria-label="Statut de la revente pour '+esc(m.opp)+'">'+seg+'</div>'+planHtml+
     (acts&&!lockN?'<div class="acts">'+acts+'</div>':'')+
+    (isPast?'':'<div class="acts"><a class="btn ghost small" href="'+esc(gcalUrl(m))+'" target="_blank" rel="noopener">Google Agenda</a><button type="button" class="btn ghost small" data-act="ics" data-id="'+id+'">Autre agenda (.ics)</button></div>')+
     '<div class="grid">'+fld('Prix payé (€)','paid',m.paid)+fld('Plancher (€)','floor',m.floor,'Vide : plancher de la grille')+fld('Prix affiché (€)','listed',listed)+fld('Revente vue ouverte le','openedOn',m.openedOn||'','Sert à apprendre le moment d’ouverture')+'</div>'+
     (lockN?'<p class="note">Verrouillé : le prix de cette vente a été récupéré depuis la billetterie.</p>':'')+
     (info.length?'<p class="note">'+info.join(' · ')+'</p>':'')+
@@ -468,7 +508,7 @@ function render(){
       h+='<p class="sub">Rien d’urgent. Les actions apparaissent ici dès qu’une revente s’ouvre ou qu’un prix doit baisser.</p>';
     }
     h+='</section>';
-    h+='<section aria-labelledby="h-fx"><h2 id="h-fx" style="margin-bottom:10px">Matchs à domicile</h2><div class="fixtures">'+
+    h+='<section aria-labelledby="h-fx"><div class="vbar" style="margin-bottom:10px"><h2 id="h-fx" style="margin:0">Matchs à domicile</h2><button type="button" class="btn ghost small" data-act="icsall">Tout ajouter à mon agenda</button></div><div class="fixtures">'+
       (rows.length?rows.map(card).join(''):'<p class="panel sub">Aucun match enregistré.</p>')+'</div></section>';
     if(fullView&&past.length)h+='<section aria-labelledby="h-past"><h2 id="h-past" style="margin-bottom:10px">Matchs passés ('+past.length+')</h2><div class="fixtures">'+past.map(card).join('')+'</div></section>';
     if(fullView){h+=learned();h+=histo();
@@ -965,6 +1005,8 @@ app.addEventListener('click',async function(e){
   if(act==='export'){exportXlsx();return;}
   if(!db||state!=='ok')return;
   if(act==='check'){patchCfg({lastCheck:new Date().toISOString(),lastCheckBy:who});toast('Vérification notée.');return;}
+  if(act==='icsall'){downloadIcs(matches.filter(function(x){return x.date&&daysBetween(parisToday(),x.date)>=0;}).sort(function(a,b){return String(a.date).localeCompare(String(b.date));}),'paris-fc-domicile.ics');return;}
+  if(act==='ics'){var im=find(id);if(im)downloadIcs([im],'paris-fc-'+String(im.opp).toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.ics');return;}
   if(act==='import'){var ta=document.getElementById('imp-text');importVentes(ta?ta.value:'');return;}
   if(act==='delvente'){var dv=ventes.filter(function(x){return x.id===id;})[0];if(dv&&dv.source==='billetterie'){toast('Vente verrouillée : données récupérées depuis la billetterie.');return;}deleteVente(id);return;}
   var m=find(id);if(!m)return;
@@ -1101,4 +1143,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build historique -->
+<!-- build agenda -->
