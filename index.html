@@ -241,7 +241,7 @@ var app=document.getElementById('app');
 
 /* ---------- utilitaires ---------- */
 function users(){return (CFGX.USERS||[]).filter(function(u){return u&&u.name&&u.email;});}
-var selUser='', pwMsg=null;
+var selUser='', pwMsg=null, rst=null;
 function lastUser(){if(selUser)return selUser;try{return localStorage.getItem('pfc_last_user')||'';}catch(e){return '';}}
 function whoFromEmail(em){
   var m=users().filter(function(u){return u.email.toLowerCase()===String(em||'').toLowerCase();})[0];
@@ -493,6 +493,47 @@ function loginView(){
     (loginErr?'<p class="msg-err" role="alert">'+esc(loginErr)+'</p>':'')+
     '<button type="submit" class="btn">Entrer</button></form>';
 }
+
+function rstPanel(){
+  var h='<details class="panel set" data-key="rst"'+(openSet.has('rst')?' open':'')+'><summary><span class="h2">Restaurer une sauvegarde</span><span class="chev" aria-hidden="true"></span></summary>'+
+    '<p class="note">Sert uniquement en cas de problème : charge le fichier JSON reçu par e-mail (« sauvegarde hebdomadaire »). Rien n’est modifié avant ta confirmation.</p>'+
+    '<div class="fld"><label for="rst-file">Fichier de sauvegarde (.json)</label><input id="rst-file" type="file" accept=".json,application/json"></div>';
+  if(rst&&rst.err)h+='<p class="msg-err" role="status">'+esc(rst.err)+'</p>';
+  if(rst&&rst.sum){
+    var q=rst.sum;
+    h+='<div class="note" role="status"><strong>Aperçu de la sauvegarde</strong> (du '+esc(q.date)+')<br>'+q.matches+' matchs · '+q.ventes+' ventes · '+q.transfers+' virements · '+q.abos+' abonnements<br>'+
+      'Actuellement dans l’appli : '+matches.length+' matchs · '+ventes.length+' ventes · '+transfers.length+' virements · '+abos.length+' abonnements.</p>'+
+      '<p class="msg-err">Attention : la restauration remplace les données actuelles par celles du fichier.</p>'+
+      '<div class="cta-row"><button type="button" class="btn" data-act="rstgo"'+(rst.busy?' disabled':'')+'>Confirmer la restauration</button> <button type="button" class="btn ghost" data-act="rstno">Annuler</button></div>';
+  }
+  return h+'</details>';
+}
+function rstParse(txt){
+  var d;try{d=JSON.parse(txt);}catch(e){return {err:'Fichier illisible : ce n’est pas un JSON valide.'};}
+  if(!d||typeof d!=='object'||!d.revente_matches||typeof d.revente_matches!=='object'||!d.revente_config||typeof d.revente_config!=='object')return {err:'Ce fichier n’est pas une sauvegarde Revente PFC.'};
+  var ids=Object.keys(d.revente_matches);
+  if(!ids.length)return {err:'La sauvegarde ne contient aucun match : restauration refusée.'};
+  for(var i=0;i<ids.length;i++){var m=d.revente_matches[ids[i]];if(!m||typeof m!=='object'||!m.opp||!m.date)return {err:'Match invalide dans le fichier ('+ids[i]+') : restauration refusée.'};}
+  var ok=['main','ventes','abonnements'],cs=Object.keys(d.revente_config);
+  for(var j=0;j<cs.length;j++){if(ok.indexOf(cs[j])<0||!d.revente_config[cs[j]]||typeof d.revente_config[cs[j]]!=='object')return {err:'Document de configuration inattendu ('+cs[j]+') : restauration refusée.'};}
+  var cv=d.revente_config.ventes||{},ca=d.revente_config.abonnements||{};
+  var dt=d.exportedAt?new Date(d.exportedAt):null;
+  return {data:d,sum:{date:dt&&!isNaN(dt)?dt.toLocaleString('fr-FR',{timeZone:'Europe/Paris'}):'date inconnue',matches:ids.length,ventes:Object.keys(cv.v||{}).length,transfers:Object.keys(cv.t||{}).length,abos:Object.keys(ca.a||{}).length}};
+}
+async function rstGo(){
+  if(!rst||!rst.data||rst.busy)return;
+  rst.busy=true;render();
+  try{
+    var d=rst.data,b=db.batch();
+    Object.keys(d.revente_matches).forEach(function(id){b.set(mref().doc(id),d.revente_matches[id]);});
+    Object.keys(d.revente_config).forEach(function(id){b.set(db.collection('revente_config').doc(id),d.revente_config[id]);});
+    await b.commit();
+    rst=null;openSet.delete('rst');await reload();render();toast('Sauvegarde restaurée.');
+  }catch(e){
+    if(isAuthError(e)){await logout();return;}
+    rst={err:'Restauration impossible : '+(e.message||e.code)};render();
+  }
+}
 function render(){
   if(state==='setup'){app.innerHTML=setupView();return;}
   if(state==='login'){app.innerHTML=loginView();var pw=document.getElementById('pw');if(pw)pw.focus();return;}
@@ -531,6 +572,7 @@ function render(){
     h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';}
   }
   if(state==='ok'&&fullView){
+    h+=rstPanel();
     h+='<details class="panel set" data-key="pw"'+(openSet.has('pw')?' open':'')+'><summary><span class="h2">Mon mot de passe</span><span class="chev" aria-hidden="true"></span></summary>'+
       '<form id="pw-form" style="display:flex;flex-direction:column;gap:12px">'+
       '<p class="note">Change le mot de passe de ton compte ('+esc(who||'')+'). Il faut saisir l’actuel pour confirmer.</p>'+
@@ -1015,6 +1057,8 @@ app.addEventListener('click',async function(e){
     return;
   }
   if(act==='logout'){await logout();return;}
+  if(act==='rstno'){rst=null;render();return;}
+  if(act==='rstgo'){await rstGo();return;}
   if(act==='retry'){await startApp();return;}
   if(act==='tab'){tab=t.dataset.v==='fin'?'fin':'matchs';render();window.scrollTo(0,0);return;}
   if(act==='export'){exportXlsx();return;}
@@ -1048,6 +1092,11 @@ app.addEventListener('click',async function(e){
 });
 app.addEventListener('change',function(e){
   var t=e.target;if(!db||state!=='ok')return;
+  if(t.id==='rst-file'){
+    var fl=t.files&&t.files[0];if(!fl){return;}
+    if(fl.size>5*1024*1024){rst={err:'Fichier trop volumineux pour une sauvegarde.'};openSet.add('rst');render();return;}
+    var rd=new FileReader();rd.onload=function(){rst=rstParse(String(rd.result||''));openSet.add('rst');render();};rd.onerror=function(){rst={err:'Lecture du fichier impossible.'};openSet.add('rst');render();};rd.readAsText(fl);return;
+  }
   if(t.dataset.vf){
     var vv=ventes.filter(function(x){return x.id===t.dataset.vid;})[0];if(!vv)return;
     var nv=Object.assign({},vv),ff=t.dataset.vf;
@@ -1215,4 +1264,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build lien-vente-match -->
+<!-- build restauration -->
