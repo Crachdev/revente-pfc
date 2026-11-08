@@ -317,7 +317,9 @@ function buildTodo(rows){
 
 /* ---------- verrous ---------- */
 var LOCK_SVG='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
-function saleOf(m){return ventes.filter(function(v){return v.matchId===m.id||v.date===m.date;})[0];}
+function isSaleOf(v,m){return v.matchId?v.matchId===m.id:v.date===m.date;}
+function autoMatchId(date,label){var c=matches.filter(function(m){return m.date===date;});if(c.length===1)return c[0].id;var l=String(label||'').toLowerCase(),b=c.filter(function(m){return l.indexOf(String(m.opp).toLowerCase())>=0;});return b.length===1?b[0].id:null;}
+function saleOf(m){return ventes.filter(function(v){return isSaleOf(v,m);})[0];}
 function lockFull(m){return !!(m.date&&m.date<parisToday()&&m.status==='vendue'&&saleOf(m));}
 function lockFin(m){var s=saleOf(m);return !lockFull(m)&&!!(s&&s.source==='billetterie');}
 function lockedVente(v,ff){if(v.source!=='billetterie')return false;if(ff==='seller')return v.sellerSrc==='billetterie';return ff==='date'||ff==='price'||ff==='fee'||ff==='label';}
@@ -754,7 +756,7 @@ async function importVentes(text){
     if(c.length<4||!/^\d{4}-\d{2}-\d{2}$/.test(c[0])){bad++;return;}
     var lot=c[4]||'';var id=lot?('vlot'+lot.replace(/\W/g,'')):('v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
     if(ventes.some(function(v){return v.id===id;})||o[id]){dup++;return;}
-    o[id]={date:c[0],label:c[1],matchId:null,price:num(c[2])||0,fee:num(c[3])||0,note:lot?('Lot '+lot):'',by:who,seller:(document.getElementById('imp-seller')||{}).value||'',sellerSrc:'manuel',sellerBy:who,reglement:'verse',source:lot?'billetterie':'manuel'};
+    o[id]={date:c[0],label:c[1],matchId:autoMatchId(c[0],c[1]),price:num(c[2])||0,fee:num(c[3])||0,note:lot?('Lot '+lot):'',by:who,seller:(document.getElementById('imp-seller')||{}).value||'',sellerSrc:'manuel',sellerBy:who,reglement:'verse',source:lot?'billetterie':'manuel'};
   });
   var ids=Object.keys(o);
   if(!ids.length){toast(bad?'Aucune ligne valide (format : date;libellé;prix;commission;lot).':'Rien de nouveau à importer.');return;}
@@ -771,11 +773,11 @@ async function saveVente(rec){
   catch(e){if(isAuthError(e)){await logout();return;}toast('Enregistrement impossible : '+(e.message||e.code));await refresh();}
 }
 function newSale(d){
-  var rec={id:'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),date:d.date,label:d.label||'',matchId:d.matchId||null,price:num(d.price)||0,fee:num(d.fee)||0,note:d.note||'',by:who,seller:d.seller===undefined?who:d.seller,sellerSrc:'manuel',sellerBy:who,reglement:'verse',source:d.source||'manuel'};
+  var rec={id:'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),date:d.date,label:d.label||'',matchId:d.matchId||autoMatchId(d.date,d.label)||null,price:num(d.price)||0,fee:num(d.fee)||0,note:d.note||'',by:who,seller:d.seller===undefined?who:d.seller,sellerSrc:'manuel',sellerBy:who,reglement:'verse',source:d.source||'manuel'};
   return saveVente(rec);
 }
 function ensureSale(m){
-  if(ventes.some(function(v){return v.matchId===m.id||v.date===m.date;}))return;
+  if(ventes.some(function(v){return isSaleOf(v,m);}))return;
   newSale({date:parisToday(),label:'Paris FC – '+m.opp,matchId:m.id,price:m.listed||0,fee:0});
   toast('Vente ajoutée aux finances (vendeur : '+who+') : vérifie le vendeur, le montant et la commission.');
 }
@@ -1213,4 +1215,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build agenda -->
+<!-- build lien-vente-match -->
