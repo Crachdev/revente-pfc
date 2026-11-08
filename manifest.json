@@ -1,6 +1,6 @@
 {
-  "name": "Revente Jean-Bouin",
-  "short_name": "PFC Revente",
+  "name": "Revente PFC",
+  "short_name": "Revente PFC",
   "description": "Suivi des reventes de places Paris FC pour Rachid et Sylvain.",
   "start_url": "/revente-pfc/",
   "scope": "/revente-pfc/",
