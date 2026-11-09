@@ -208,6 +208,7 @@ details.fx.past[open]{opacity:1}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>// Configuration Firebase (projet revente-pfc). Ces valeurs sont publiques par conception :
 // la protection vient des comptes (mot de passe) et des règles Firestore.
@@ -246,7 +247,7 @@ var app=document.getElementById('app');
 
 /* ---------- utilitaires ---------- */
 function users(){return (CFGX.USERS||[]).filter(function(u){return u&&u.name&&u.email;});}
-var selUser='', pwMsg=null, rst=null;
+var selUser='', pwMsg=null, rst=null, pushMsg=null;
 function lastUser(){if(selUser)return selUser;try{return localStorage.getItem('pfc_last_user')||'';}catch(e){return '';}}
 function whoFromEmail(em){
   var m=users().filter(function(u){return u.email.toLowerCase()===String(em||'').toLowerCase();})[0];
@@ -504,6 +505,56 @@ function loginView(){
     '<button type="submit" class="btn">Entrer</button></form>';
 }
 
+
+function pushSupported(){return ('Notification' in window)&&('serviceWorker' in navigator)&&('PushManager' in window)&&typeof firebase!=='undefined'&&typeof firebase.messaging==='function';}
+function pushStandalone(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||('standalone' in navigator&&navigator.standalone);}
+function pushRef(){return db.collection('revente_config').doc('push');}
+function pushKeyOf(tok){return String(who||'x')+'_'+tok.slice(-14).replace(/[^A-Za-z0-9_-]/g,'');}
+function pushPanel(){
+  var on=false;try{on=localStorage.getItem('pfc-push')==='1';}catch(e){}
+  var h='<details class="panel set" data-key="push"'+(openSet.has('push')?' open':'')+'><summary><span class="h2">Notifications push</span><span class="chev" aria-hidden="true"></span></summary>'+
+    '<p class="note">Reçois une notification sur ce téléphone quand une action est à faire (revente à poster, prix à baisser), même appli fermée. Sur iPhone : installe d’abord l’appli sur l’écran d’accueil.</p>';
+  if(!pushSupported()){
+    h+='<p class="msg-err" role="status">'+(('Notification' in window)?'Ce navigateur ne gère pas les notifications push.':'Notifications indisponibles ici : '+(pushStandalone()?'navigateur non compatible.':'ouvre l’appli installée sur l’écran d’accueil.'))+'</p>';
+  }else{
+    if(!cfg.vapidKey){
+      h+='<div class="fld"><label for="push-vapid">Clé web push (VAPID), à coller une seule fois</label><input id="push-vapid" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"><small>Console Firebase → Paramètres du projet → Cloud Messaging → Certificats Web Push → Générer une paire de clés.</small></div>'+
+        '<button type="button" class="btn ghost" data-act="pushkey">Enregistrer la clé</button>';
+    }else{
+      h+=on?'<p class="note"><b>Activées sur cet appareil.</b></p><button type="button" class="btn ghost" data-act="pushoff">Désactiver sur cet appareil</button>'
+           :'<button type="button" class="btn" data-act="pushon"'+(pushMsg&&pushMsg.busy?' disabled':'')+'>Activer les notifications sur cet appareil</button>';
+    }
+  }
+  if(pushMsg&&pushMsg.t)h+='<p class="'+(pushMsg.ok?'note':'msg-err')+'" role="status">'+esc(pushMsg.t)+'</p>';
+  return h+'</details>';
+}
+async function pushOn(){
+  pushMsg={busy:true,ok:true,t:'Activation en cours…'};render();
+  try{
+    var perm=await Notification.requestPermission();
+    if(perm!=='granted'){pushMsg={ok:false,t:'Autorisation refusée : active-la dans les réglages du téléphone.'};render();return;}
+    var reg=await navigator.serviceWorker.ready;
+    var tok=await firebase.messaging().getToken({vapidKey:cfg.vapidKey,serviceWorkerRegistration:reg});
+    if(!tok)throw new Error('Aucun jeton reçu');
+    var o={};o[pushKeyOf(tok)]={token:tok,who:who,at:new Date().toISOString(),ua:String(navigator.userAgent||'').slice(0,80)};
+    await pushRef().set({t:o},{merge:true});
+    try{localStorage.setItem('pfc-push','1');localStorage.setItem('pfc-push-key',pushKeyOf(tok));}catch(e){}
+    pushMsg={ok:true,t:'Notifications activées sur cet appareil.'};render();
+  }catch(e){
+    if(isAuthError(e)){await logout();return;}
+    pushMsg={ok:false,t:'Activation impossible : '+(e.message||e.code)};render();
+  }
+}
+async function pushOff(){
+  try{
+    var k=null;try{k=localStorage.getItem('pfc-push-key');}catch(e){}
+    if(k)await pushRef().update('t.'+k,firebase.firestore.FieldValue.delete());
+    try{await firebase.messaging().deleteToken();}catch(e){}
+    try{localStorage.removeItem('pfc-push');localStorage.removeItem('pfc-push-key');}catch(e){}
+    pushMsg={ok:true,t:'Notifications désactivées sur cet appareil.'};
+  }catch(e){if(isAuthError(e)){await logout();return;}pushMsg={ok:false,t:'Désactivation impossible : '+(e.message||e.code)};}
+  render();
+}
 function rstPanel(){
   var h='<details class="panel set" data-key="rst"'+(openSet.has('rst')?' open':'')+'><summary><span class="h2">Restaurer une sauvegarde</span><span class="chev" aria-hidden="true"></span></summary>'+
     '<p class="note">Sert uniquement en cas de problème : charge le fichier JSON reçu par e-mail (« sauvegarde hebdomadaire »). Rien n’est modifié avant ta confirmation.</p>'+
@@ -582,6 +633,7 @@ function render(){
     h+='<p class="note">Les deux places côte à côte se vendent par paire : un seul de vous deux met la paire en vente. Revente autorisée uniquement sur la plateforme officielle du club (CGV abonnements 2026-27, art. 2.7.2).</p>';}
   }
   if(state==='ok'&&fullView){
+    h+=pushPanel();
     h+=rstPanel();
     h+='<details class="panel set" data-key="pw"'+(openSet.has('pw')?' open':'')+'><summary><span class="h2">Mon mot de passe</span><span class="chev" aria-hidden="true"></span></summary>'+
       '<form id="pw-form" style="display:flex;flex-direction:column;gap:12px">'+
@@ -1148,6 +1200,9 @@ app.addEventListener('click',async function(e){
   }
   if(act==='logout'){await logout();return;}
   if(act==='rstno'){rst=null;render();return;}
+  if(act==='pushon'){await pushOn();return;}
+  if(act==='pushoff'){await pushOff();return;}
+  if(act==='pushkey'){var pk=((document.getElementById('push-vapid')||{}).value||'').trim();if(pk.length<60||/\s/.test(pk)){pushMsg={ok:false,t:'Clé invalide : colle la clé publique complète.'};render();return;}pushMsg=null;patchCfg({vapidKey:pk});toast('Clé enregistrée.');return;}
   if(act==='rstgo'){await rstGo();return;}
   if(act==='retry'){await startApp();return;}
   if(act==='tab'){tab=t.dataset.v==='fin'?'fin':'matchs';render();window.scrollTo(0,0);return;}
@@ -1377,4 +1432,4 @@ function configured(){
 </script>
 </body>
 </html>
-<!-- build bilan-saison -->
+<!-- build push -->

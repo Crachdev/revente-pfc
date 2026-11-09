@@ -3,13 +3,14 @@
  * Stratégie : Network-first avec cache de secours pour les assets statiques.
  */
 
-const CACHE_NAME = "pfc-revente-v2";
+const CACHE_NAME = "pfc-revente-v3";
 
 // Bibliothèques tierces à garder pour un démarrage hors connexion
 const LIBS = [
   "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js",
   "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js",
   "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js",
+  "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js",
   "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
 ];
 const isLib = u => LIBS.indexOf(u) >= 0;
@@ -89,6 +90,31 @@ self.addEventListener("message", event => {
       badge: "/revente-pfc/icons/icon-192.png",
       tag: "pfc-weekly",
       renotify: false
+    })
+  );
+});
+
+/* ── Notifications push (Firebase Cloud Messaging, messages « data » envoyés par GitHub Actions) ── */
+self.addEventListener("push", event => {
+  let d = {};
+  try { const j = event.data ? event.data.json() : {}; d = j.data || j.notification || j || {}; } catch (e) {}
+  event.waitUntil(
+    self.registration.showNotification(d.title || "Paris FC – Revente", {
+      body: d.body || "Une action est à faire.",
+      icon: "/revente-pfc/icons/icon-192.png",
+      badge: "/revente-pfc/icons/icon-192.png",
+      tag: "pfc-push",
+      data: { url: d.url || "/revente-pfc/" }
+    })
+  );
+});
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/revente-pfc/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      for (const c of list) { if (c.url.indexOf("/revente-pfc/") >= 0 && "focus" in c) return c.focus(); }
+      return self.clients.openWindow(url);
     })
   );
 });
