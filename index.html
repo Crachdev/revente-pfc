@@ -423,7 +423,7 @@ function card(r){
     '<span class="chev" aria-hidden="true"></span></summary>'+
     '<div class="body"><div class="seg" role="group" aria-label="Statut de la revente pour '+esc(m.opp)+'">'+seg+'</div>'+planHtml+
     (acts&&!lockN?'<div class="acts">'+acts+'</div>':'')+
-    (isPast?'':'<div class="acts"><a class="btn ghost small" href="'+esc(gcalUrl(m))+'" target="_blank" rel="noopener">Google Agenda</a><button type="button" class="btn ghost small" data-act="ics" data-id="'+id+'">Autre agenda (.ics)</button></div>')+
+    (isPast?'':'<div class="acts"><a class="btn ghost small" href="'+esc(gcalUrl(m))+'" target="_blank" rel="noopener">Google Agenda</a><button type="button" class="btn ghost small" data-act="ics" data-id="'+id+'">Autre agenda (.ics)</button>'+('share' in navigator?'<button type="button" class="btn ghost small" data-act="share" data-id="'+id+'">Partager</button>':'')+'</div>')+
     '<div class="grid">'+fld('Prix payé (€)','paid',m.paid)+fld('Plancher (€)','floor',m.floor,'Vide : plancher de la grille')+fld('Prix affiché (€)','listed',listed)+fld('Revente vue ouverte le','openedOn',m.openedOn||'','Sert à apprendre le moment d’ouverture')+'</div>'+
     (lockN?'<p class="note">Verrouillé : le prix de cette vente a été récupéré depuis la billetterie.</p>':'')+
     (info.length?'<p class="note">'+info.join(' · ')+'</p>':'')+
@@ -1070,6 +1070,7 @@ app.addEventListener('click',async function(e){
   if(act==='check'){patchCfg({lastCheck:new Date().toISOString(),lastCheckBy:who});toast('Vérification notée.');return;}
   if(act==='icsall'){downloadIcs(matches.filter(function(x){return x.date&&daysBetween(parisToday(),x.date)>=0;}).sort(function(a,b){return String(a.date).localeCompare(String(b.date));}),'paris-fc-domicile.ics');return;}
   if(act==='ics'){var im=find(id);if(im)downloadIcs([im],'paris-fc-'+String(im.opp).toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.ics');return;}
+  if(act==='share'){var sm=find(id);if(sm&&'share' in navigator){var shareDate=sm.date?new Date(sm.date+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'';var shareTxt='Paris FC – '+sm.opp+(shareDate?' · '+shareDate:'')+(sm.listed?' · Place dispo à '+sm.listed+' €':'');navigator.share({title:'Paris FC – '+sm.opp,text:shareTxt,url:location.href}).catch(function(){});}return;}
   if(act==='import'){var ta=document.getElementById('imp-text');importVentes(ta?ta.value:'');return;}
   if(act==='delvente'){var dv=ventes.filter(function(x){return x.id===id;})[0];if(dv&&dv.source==='billetterie'){toast('Vente verrouillée : données récupérées depuis la billetterie.');return;}deleteVente(id);return;}
   var m=find(id);if(!m)return;
