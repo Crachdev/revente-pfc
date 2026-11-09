@@ -41,7 +41,9 @@ async function sendPush(db, title, body){
 (async()=>{
   admin.initializeApp({credential:admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))});
   const db=admin.firestore();
-  const cfg=(await db.doc('revente_config/main').get()).data()||{};
+  // Mêmes valeurs par défaut que l'appli (index.html, constante DEF) : à garder identiques.
+  const DEF={basePrice:null,markup:0,drop7:10,drop3:20,floorPct:50,watchFrom:21};
+  const cfg=Object.assign({},DEF,(await db.doc('revente_config/main').get()).data()||{});
   const snap=await db.collection('revente_matches').get();
   const items=[];
   snap.forEach(d=>{
