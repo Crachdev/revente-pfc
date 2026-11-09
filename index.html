@@ -134,6 +134,7 @@ details.set[open]>summary{margin-bottom:12px}
 #iosHint{display:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted);line-height:1.5;text-align:center}
 #iosHint.visible{display:block}
 #iosHint strong{color:var(--ink);font-weight:600}
+.qs{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line,rgba(128,128,128,.3));padding-top:12px}.qs .h3{font-weight:600}
 </style>
 <style>
 header{display:block}
@@ -400,7 +401,11 @@ function card(r){
   var acts='';
   if(p&&(m.status==='attente'||m.status==='ouverte')) acts+='<button type="button" class="btn small" data-act="posted" data-id="'+id+'" data-v="'+p.now+'">Posté à '+eur(p.now)+'</button>';
   if(p&&m.status==='enligne'&&listed!==p.now) acts+='<button type="button" class="btn small" data-act="posted" data-id="'+id+'" data-v="'+p.now+'">Baissé à '+eur(p.now)+'</button>';
-  if(m.status==='enligne') acts+='<button type="button" class="btn ghost small" data-act="sold" data-id="'+id+'">Marquer vendue</button>';
+  var qs='';
+  if(m.status==='enligne'&&!lockN) qs='<div class="qs"><span class="h3">Vendue ? Note-la en un geste</span><div class="grid">'+
+    '<div class="fld"><label for="qp-'+id+'">Prix de vente (€)</label><input id="qp-'+id+'" type="number" inputmode="decimal" step="0.01" min="0" value="'+esc(listed==null?'':listed)+'"></div>'+
+    '<div class="fld"><label for="qf-'+id+'">Commission du club (€)</label><input id="qf-'+id+'" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0"></div></div>'+
+    '<button type="button" class="btn small" data-act="qsold" data-id="'+id+'">Vendue</button></div>';
   function fld(label,field,val,extra){
     var fid='f-'+field+'-'+id;
     var dis=(lockN&&(field==='paid'||field==='floor'||field==='listed'))?' disabled':'';
@@ -423,6 +428,7 @@ function card(r){
     '<span class="chev" aria-hidden="true"></span></summary>'+
     '<div class="body"><div class="seg" role="group" aria-label="Statut de la revente pour '+esc(m.opp)+'">'+seg+'</div>'+planHtml+
     (acts&&!lockN?'<div class="acts">'+acts+'</div>':'')+
+    qs+
     (isPast?'':'<div class="acts"><a class="btn ghost small" href="'+esc(gcalUrl(m))+'" target="_blank" rel="noopener">Google Agenda</a><button type="button" class="btn ghost small" data-act="ics" data-id="'+id+'">Autre agenda (.ics)</button>'+('share' in navigator?'<button type="button" class="btn ghost small" data-act="share" data-id="'+id+'">Partager</button>':'')+'</div>')+
     '<div class="grid">'+fld('Prix payé (€)','paid',m.paid)+fld('Plancher (€)','floor',m.floor,'Vide : plancher de la grille')+fld('Prix affiché (€)','listed',listed)+fld('Revente vue ouverte le','openedOn',m.openedOn||'','Sert à apprendre le moment d’ouverture')+'</div>'+
     (lockN?'<p class="note">Verrouillé : le prix de cette vente a été récupéré depuis la billetterie.</p>':'')+
@@ -1139,6 +1145,12 @@ app.addEventListener('click',async function(e){
     if(!m.listedOn)p2.listedOn=parisToday();
     if(m.firstListed==null)p2.firstListed=Number(t.dataset.v);
     patchMatch(id,p2);
+  }else if(act==='qsold'){
+    var qp=num((document.getElementById('qp-'+id)||{}).value),qf=num((document.getElementById('qf-'+id)||{}).value)||0;
+    if(!qp||qp<=0){toast('Indique le prix de vente.');return;}
+    if(qf<0||qf>=qp){toast('Commission incohérente avec le prix.');return;}
+    patchMatch(id,m.soldOn?{status:'vendue',listed:qp}:{status:'vendue',soldOn:parisToday(),listed:qp});
+    if(!ventes.some(function(v){return isSaleOf(v,m);})){newSale({date:parisToday(),label:'Paris FC – '+m.opp,matchId:m.id,price:qp,fee:qf});toast('Vente notée : net '+eur(qp-qf)+'.');}
   }else if(act==='sold'){
     patchMatch(id,m.soldOn?{status:'vendue'}:{status:'vendue',soldOn:parisToday()});
     ensureSale(m);
@@ -1335,4 +1347,4 @@ function configured(){
 </body>
 </html>
 
-<!-- build restauration -->
+<!-- build vendu-rapide -->
