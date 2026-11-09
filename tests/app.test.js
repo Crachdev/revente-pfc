@@ -36,6 +36,10 @@ async function open(browser, failSnap) {
     assert.ok(/295,44/.test(txt) && /147,72/.test(txt), txt);
   });
   await p.click('[data-act="view"]'); await p.waitForTimeout(150);
+  await t('statistiques : base de prédiction affichée', async () => {
+    const txt = await p.$eval('#h-stat', e => e.parentElement.innerText);
+    assert.ok(/Ventes analysées\s*5/.test(txt) && /Estimation indicative/.test(txt) && /Peu de données/.test(txt), txt);
+  });
   await t('totaux par saison', async () => {
     const txt = await p.$eval('section[aria-label="Par saison"]', e => e.innerText);
     assert.ok(/2026-27/.test(txt) && /295,44/.test(txt), txt);
