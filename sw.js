@@ -53,3 +53,31 @@ self.addEventListener("fetch", event => {
       .catch(() => caches.match(event.request))
   );
 });
+
+/* ── Notifications locales ── */
+self.addEventListener("message", event => {
+  if (!event.data || event.data.type !== "PFC_NOTIFY") return;
+  const matches = event.data.matches || [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const in7 = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const soon = matches.filter(m => {
+    if (!m.date) return false;
+    const d = new Date(m.date + "T12:00:00");
+    return d >= today && d <= in7;
+  });
+  if (!soon.length) return;
+  const titles = soon.map(m => m.opp).join(", ");
+  const body = soon.length === 1
+    ? "1 match à revendre cette semaine : " + titles
+    : soon.length + " matchs à revendre cette semaine : " + titles;
+  event.waitUntil(
+    self.registration.showNotification("Paris FC – Revente", {
+      body,
+      icon: "/revente-pfc/icons/icon-192.png",
+      badge: "/revente-pfc/icons/icon-192.png",
+      tag: "pfc-weekly",
+      renotify: false
+    })
+  );
+});

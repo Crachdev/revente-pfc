@@ -1004,6 +1004,32 @@ async function startApp(){
 }
 async function afterLogin(){
   await startApp();
+  pfcNotify();
+}
+function pfcNotify(){
+  if(!('Notification' in window)||!('serviceWorker' in navigator))return;
+  var isStandalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||('standalone' in navigator&&navigator.standalone);
+  if(!isStandalone)return;
+  var today=new Date();today.setHours(0,0,0,0);
+  var in7=new Date(today.getTime()+7*24*60*60*1000);
+  var soon=matches.filter(function(m){
+    if(!m.date)return false;
+    var d=new Date(m.date+'T12:00:00');
+    return d>=today&&d<=in7&&m.status!=='vendue'&&m.status!=='nonvendue';
+  });
+  if(!soon.length)return;
+  if(Notification.permission==='granted'){
+    _pfcSendNotify(soon);
+  }else if(Notification.permission==='default'){
+    Notification.requestPermission().then(function(p){
+      if(p==='granted')_pfcSendNotify(soon);
+    });
+  }
+}
+function _pfcSendNotify(soon){
+  navigator.serviceWorker.ready.then(function(reg){
+    reg.active&&reg.active.postMessage({type:'PFC_NOTIFY',matches:soon});
+  }).catch(function(){});
 }
 async function logout(){
   stopSync();
