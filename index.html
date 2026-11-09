@@ -124,6 +124,10 @@ details.set[open]>summary{margin-bottom:12px}
 }
 </style>
 <style>
+/* ── Bandeau hors-ligne ── */
+#offlineBanner{position:fixed;top:0;left:0;right:0;z-index:40;display:none;align-items:center;justify-content:center;gap:8px;padding:8px 16px;background:#1a2538;color:#93a4bb;font:600 13px var(--f-body);letter-spacing:.02em;border-bottom:1px solid #26334a;text-align:center}
+#offlineBanner.visible{display:flex}
+#offlineBanner svg{flex:none;opacity:.8}
 /* ── PWA install ── */
 #pwaInstall{display:none;align-items:center;gap:10px;min-height:48px;padding:0 18px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 15px var(--f-body);cursor:pointer;width:100%;justify-content:center}
 #pwaInstall.visible{display:flex}
@@ -1196,6 +1200,7 @@ function configured(){
   }
   if(!firebase.apps.length)firebase.initializeApp(CFGX.FIREBASE);
   auth=firebase.auth();db=firebase.firestore();
+  db.enableIndexedDbPersistence().catch(function(){});
   var first=true;
   auth.onAuthStateChanged(function(u){
     if(!first)return;first=false;
@@ -1204,6 +1209,11 @@ function configured(){
 })();
 })();
 </script>
+<!-- ── Bandeau hors-ligne ── -->
+<div id="offlineBanner" role="status" aria-live="polite">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
+  Hors-ligne — données en cache
+</div>
 <!-- ── PWA install banner ── -->
 <div id="pwaBar" style="position:fixed;bottom:0;left:0;right:0;z-index:30;padding:12px max(16px,env(safe-area-inset-left,0px)) calc(12px + env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--line);display:none;flex-direction:column;gap:8px">
   <button id="pwaInstall" type="button">
@@ -1217,6 +1227,17 @@ function configured(){
 </div>
 <script>
 (function(){
+  /* ── Bandeau hors-ligne ── */
+  function syncOfflineBanner(){
+    var b=document.getElementById('offlineBanner');
+    if(!b)return;
+    if(navigator.onLine){b.classList.remove('visible');}
+    else{b.classList.add('visible');}
+  }
+  syncOfflineBanner();
+  window.addEventListener('online',syncOfflineBanner);
+  window.addEventListener('offline',syncOfflineBanner);
+
   /* ── Service Worker ── */
   if('serviceWorker' in navigator){
     window.addEventListener('load',function(){
