@@ -20,6 +20,24 @@ function plan(m,J,cfg){
   return Math.max(floorV, Math.round(J<=1?floorV : J<=3?openP*(1-N(cfg.drop3)/100) : J<=7?openP*(1-N(cfg.drop7)/100) : openP));
 }
 
+
+// Notification push (FCM) vers les appareils enregistrés dans revente_config/push
+async function sendPush(db, title, body){
+  try{
+    const doc=(await db.doc('revente_config/push').get()).data()||{};
+    const entries=Object.entries(doc.t||{}).filter(([,v])=>v&&v.token);
+    if(!entries.length){ console.log('Push : aucun appareil enregistré.'); return; }
+    const res=await admin.messaging().sendEachForMulticast({
+      tokens:entries.map(([,v])=>v.token),
+      data:{title,body,url:'https://crachdev.github.io/revente-pfc/'},
+      webpush:{headers:{Urgency:'high',TTL:'43200'}}
+    });
+    const dead=[];
+    res.responses.forEach((r,i)=>{ if(!r.success){ const c=(r.error&&r.error.code)||''; console.log('Push échec',entries[i][0],c); if(/registration-token-not-registered|invalid-registration-token|invalid-argument/.test(c)) dead.push(entries[i][0]); } });
+    for(const k of dead){ await db.doc('revente_config/push').update({['t.'+k]:admin.firestore.FieldValue.delete()}); }
+    console.log('Push envoyé',res.successCount+'/'+entries.length);
+  }catch(e){ console.error('Push ignoré :',e.message||e); }
+}
 (async()=>{
   admin.initializeApp({credential:admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))});
   const db=admin.firestore();
@@ -36,11 +54,17 @@ function plan(m,J,cfg){
     else if(m.status==='attente'&&J<=N(cfg.watchFrom)) items.push({pr:2,J,t:`<b>Surveiller</b> — ${m.opp} (${jl(J)}) : revente pas encore vue.`});
   });
   items.sort((a,b)=>a.pr-b.pr||a.J-b.J);
-  if(!items.length){ console.log('Rien à signaler.'); return; }
+  if(!items.length){
+    console.log('Rien à signaler.');
+    if(process.env.FORCE==='true') await sendPush(db,'Revente PFC','Test : les notifications push fonctionnent.');
+    return;
+  }
   const url='https://crachdev.github.io/revente-pfc/';
   const html=`<p>Revente Paris FC — à faire aujourd'hui :</p><ul>${items.map(i=>`<li>${i.t}</li>`).join('')}</ul><p><a href="${url}">Ouvrir le tableau de bord</a> · <a href="https://billetterie.parisfc.fr/fr/calendrier?filters%5Bstate%5D%5B0%5D=choice_secondary_market">Page des reventes</a></p>`;
   const to=process.env.MAIL_TO;
   const tr=nodemailer.createTransport({service:'gmail',auth:{user:to.split(',')[0].trim(),pass:process.env.GMAIL_APP_PASSWORD}});
   await tr.sendMail({from:`Revente PFC <${to.split(',')[0].trim()}>`,to,subject:`Revente PFC : ${items.length} action(s) à faire`,html});
   console.log('Envoyé',items.length);
+  const strip=t=>t.replace(/<[^>]+>/g,'');
+  await sendPush(db,`Revente PFC : ${items.length} action(s)`,items.slice(0,3).map(i=>strip(i.t)).join(' | ').slice(0,180));
 })().catch(e=>{console.error(e);process.exit(1);});
