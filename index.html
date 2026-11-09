@@ -828,6 +828,38 @@ function bilanView(){
     '</ul></section>';
   return h;
 }
+
+function median(a){if(!a.length)return null;var b=a.slice().sort(function(x,y){return x-y;}),m=Math.floor(b.length/2);return b.length%2?b[m]:(b[m-1]+b[m])/2;}
+function avgOf(a){return a.length?a.reduce(function(x,y){return x+y;},0)/a.length:null;}
+function statsData(){
+  var rows=ventes.map(function(v){var m=v.matchId?matches.filter(function(x){return x.id===v.matchId;})[0]:null;return {v:v,m:m,gross:v.price,net:netOf(v)};}).filter(function(r){return r.gross>0;});
+  var gross=rows.map(function(r){return r.gross;}),nets=rows.map(function(r){return r.net;});
+  var we=rows.filter(function(r){return r.m&&r.m.weekend;}).map(function(r){return r.gross;}),wk=rows.filter(function(r){return r.m&&!r.m.weekend;}).map(function(r){return r.gross;});
+  var soldJ=[],openJ=[],listD=[];
+  matches.forEach(function(m){
+    if(m.status!=='vendue'||!m.date)return;
+    if(m.soldOn){var j=daysBetween(m.soldOn,m.date);if(j>=0)soldJ.push(j);}
+    if(m.openedOn){var o=daysBetween(m.openedOn,m.date);if(o>=0)openJ.push(o);}
+    if(m.listedOn&&m.soldOn){var d=daysBetween(m.listedOn,m.soldOn);if(d>=0)listD.push(d);}
+  });
+  return {n:rows.length,gross:gross,nets:nets,med:median(gross),min:gross.length?Math.min.apply(null,gross):null,max:gross.length?Math.max.apply(null,gross):null,avgNet:avgOf(nets),we:we,wk:wk,soldJ:soldJ,openJ:openJ,listD:listD};
+}
+function statsView(){
+  var S=statsData();
+  function li(l,v){return '<li><span>'+l+'</span><b>'+v+'</b></li>';}
+  function nb(a,u){return a.length?(Math.round(avgOf(a)*10)/10)+' '+u+' (sur '+a.length+')':'à venir : se remplit tout seul avec les prochaines ventes';}
+  var h='<section class="panel" aria-labelledby="h-stat"><h2 id="h-stat">Statistiques (base de prédiction)</h2><ul class="tiers">'+
+    li('Ventes analysées',String(S.n))+
+    li('Prix de vente de la paire (médiane)',S.med!=null?eur(S.med)+' · de '+eur(S.min)+' à '+eur(S.max):'—')+
+    (S.we.length&&S.wk.length?li('Week-end / semaine (moyenne)',eur(avgOf(S.we))+' / '+eur(avgOf(S.wk))):'')+
+    li('Vente avant le match',nb(S.soldJ,'jours'))+
+    li('Revente vue ouverte avant le match',nb(S.openJ,'jours'))+
+    li('Délai mise en vente → vente',nb(S.listD,'jours'))+
+    '</ul>';
+  if(S.n>=3)h+='<p class="note"><b>Estimation indicative du prix d’un prochain match : '+eur(S.med)+'</b> (médiane de '+S.n+' ventes). '+(S.n<10?'Peu de données : à prendre avec prudence, la fiabilité grandit avec les ventes.':'Basée sur un historique suffisant.')+'</p>';
+  else h+='<p class="note">Prédictions disponibles dès 3 ventes ; plus il y a de matchs, plus elles sont fiables. Les dates d’ouverture, de mise en vente et de vente sont enregistrées automatiquement quand tu utilises les boutons de l’appli.</p>';
+  return h+'</section>';
+}
 function financeSimple(){
   var list=sortedVentes(),tot=list.reduce(function(a,v){return a+netOf(v);},0),b=balance(),rs=abos.map(roiOf);
   var h='<section class="panel" aria-labelledby="h-fin"><h2 id="h-fin">En un coup d’œil</h2>'+
@@ -851,6 +883,7 @@ function financeView(){
   h+=checkView();
   h+=bilanView();
   h+=roiView();
+  h+=statsView();
   h+=balanceView();
   var opts='<option value="">Autre / hors liste</option>'+matches.map(function(m){return '<option value="'+esc(m.id)+'">'+esc('Paris FC – '+m.opp+' ('+m.date+')')+'</option>';}).join('');
   h+='<details class="panel set" data-key="addv"'+(openSet.has('addv')||!list.length?' open':'')+'><summary><span class="h2">Ajouter une vente</span><span class="chev" aria-hidden="true"></span></summary>'+
@@ -1435,4 +1468,4 @@ function configured(){
 </script>
 </body>
 </html>
-<!-- build saison-vente -->
+<!-- build stats -->
