@@ -652,11 +652,12 @@ function render(){
 
 /* ---------- finances ---------- */
 function seasonOf(d){var p=String(d).split('-').map(Number);var y=p[0],mo=p[1];var a=mo>=8?y:y-1;return a+'-'+String(a+1).slice(2);}
+function seasonOfSale(v){var m=v.matchId?matches.filter(function(x){return x.id===v.matchId;})[0]:null;return seasonOf(m&&m.date?m.date:v.date);}
 function fiscalOf(d){return String(d).slice(0,4);}
 function netOf(v){return Math.round((v.price-v.fee)*100)/100;}
 function groupBy(list,fn){
   var g={};
-  list.forEach(function(v){var k=fn(v.date);if(!g[k])g[k]={k:k,n:0,brut:0,fee:0,net:0};g[k].n++;g[k].brut+=v.price;g[k].fee+=v.fee;g[k].net+=netOf(v);});
+  list.forEach(function(v){var k=fn(v);if(!g[k])g[k]={k:k,n:0,brut:0,fee:0,net:0};g[k].n++;g[k].brut+=v.price;g[k].fee+=v.fee;g[k].net+=netOf(v);});
   return Object.keys(g).sort().reverse().map(function(k){return g[k];});
 }
 function sortedVentes(){return ventes.slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id));});}
@@ -726,7 +727,7 @@ var MOIS=['Janv','Févr','Mars','Avr','Mai','Juin','Juil','Août','Sept','Oct','
 function seasonStart(s){var y=Number(String(s).slice(0,4));return Date.UTC(y,7,1);}
 function seasonEnd(s){var y=Number(String(s).slice(0,4));return Date.UTC(y+1,6,31);}
 function roiOf(abo){
-  var n=Math.max(1,sellers().length),sales=ventes.filter(function(v){return seasonOf(v.date)===abo.season;}).sort(function(x,y){return String(x.date).localeCompare(String(y.date));});
+  var n=Math.max(1,sellers().length),sales=ventes.filter(function(v){return seasonOfSale(v)===abo.season;}).sort(function(x,y){return String(x.date).localeCompare(String(y.date));});
   var net=0,pend=0;sales.forEach(function(v){net+=netOf(v);if(v.reglement==='attente')pend+=netOf(v);});
   var share=r2(net/n);
   return {abo:abo,sales:sales,net:net,share:share,pend:r2(pend/n),n:n,pct:abo.amount>0?share/abo.amount*100:0,left:r2(abo.amount-share)};
@@ -772,7 +773,7 @@ function roiView(){
   }
   if(!rs.length)h+='<section class="panel"><h2>Rentabilité de l’abonnement</h2><p class="sub">Ajoute le montant d’un abonnement pour suivre son remboursement par les reventes.</p></section>';
   rs.forEach(function(R){h+=roiCard(R);});
-  var seasons={};ventes.forEach(function(v){seasons[seasonOf(v.date)]=1;});
+  var seasons={};ventes.forEach(function(v){seasons[seasonOfSale(v)]=1;});
   var missing=[];Object.keys(seasons).sort().reverse().forEach(function(s){sellers().forEach(function(p){if(!abos.some(function(x){return x.season===s&&x.person===p;}))missing.push(p+' ('+s+')');});});
   var opts=Object.keys(seasons).sort().reverse();if(!opts.length)opts=[seasonOf(parisToday())];
   h+='<details class="panel set" data-key="addabo"'+(openSet.has('addabo')?' open':'')+'><summary><span class="h2">Ajouter un abonnement</span><span class="chev" aria-hidden="true"></span></summary>'+
@@ -806,7 +807,7 @@ function bilanView(){
   var played=ms.filter(function(m){return daysBetween(today,m.date)<0;}),coming=ms.length-played.length;
   var c={vendue:0,pretee:0,gardee:0,nonvendue:0,autre:0};
   played.forEach(function(m){if(c[m.status]!==undefined)c[m.status]++;else c.autre++;});
-  var sales=ventes.filter(function(v){return seasonOf(v.date)===sea;}),nets=sales.map(netOf);
+  var sales=ventes.filter(function(v){return seasonOfSale(v)===sea;}),nets=sales.map(netOf);
   var tot=nets.reduce(function(a,b){return a+b;},0),avg=nets.length?tot/nets.length:0,best=nets.length?Math.max.apply(null,nets):0;
   var tried=c.vendue+c.nonvendue,rate=tried?Math.round(c.vendue/tried*100):null;
   var delays=[];ms.forEach(function(m){if(m.status==='vendue'&&m.listedOn&&m.soldOn){var d=daysBetween(m.listedOn,m.soldOn);if(d>=0)delays.push(d);}});
@@ -846,7 +847,7 @@ function financeView(){
   var h='<section class="panel" aria-labelledby="h-fin"><h2 id="h-fin">Mes ventes</h2>'+
     '<div class="kpis"><div><span class="cap">Net des reventes</span><b class="big">'+eur(tot.net)+'</b></div><div><span class="cap">Par personne</span><b class="big">'+eur(tot.net/2)+'</b></div><div><span class="cap">Ventes</span><b class="big">'+list.length+'</b></div></div>'+
     '<button type="button" class="btn" data-act="export"'+(list.length?'':' disabled')+'>Exporter en Excel</button>'+
-    '<p class="note">Une vente = une paire de places. Le net est le prix de vente moins la commission du club ; « par personne » est la moitié du net. Saison du 1er août au 31 juillet, année fiscale = année civile.</p></section>';
+    '<p class="note">Une vente = une paire de places. Le net est le prix de vente moins la commission du club ; « par personne » est la moitié du net. Saison du 1er août au 31 juillet (celle du match vendu), année fiscale = année civile de la date de vente.</p></section>';
   h+=checkView();
   h+=bilanView();
   h+=roiView();
@@ -867,12 +868,12 @@ function financeView(){
     '<div class="fld" style="margin-top:12px"><label for="imp-seller">Vendeur des ventes importées</label><select id="imp-seller">'+selOpts(who,true)+'</select></div>'+
     '<div class="fld" style="margin-top:12px"><label for="imp-text">Lignes à importer</label><textarea id="imp-text" rows="6" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:14px var(--f-body)"></textarea></div>'+
     '<button type="button" class="btn" data-act="import" style="margin-top:12px">Importer</button></details>';
-  h+=sumTable('Par saison',groupBy(list,seasonOf),'Saison')+sumTable('Par année fiscale',groupBy(list,fiscalOf),'Année');
+  h+=sumTable('Par saison',groupBy(list,seasonOfSale),'Saison')+sumTable('Par année fiscale',groupBy(list,function(v){return fiscalOf(v.date);}),'Année');
   if(list.length){
     h+='<section class="panel" aria-labelledby="h-det"><h2 id="h-det">Détail des ventes</h2><div class="vlist">'+list.map(function(v){
       function f(label,field,val,type){return '<div class="fld"><label for="vf-'+field+'-'+esc(v.id)+'">'+label+'</label><input id="vf-'+field+'-'+esc(v.id)+'"'+(lockedVente(v,field)?' disabled':'')+' type="'+type+'" '+(type==='number'?'inputmode="decimal" step="0.01" min="0" ':'')+'data-vf="'+field+'" data-vid="'+esc(v.id)+'" value="'+esc(val==null?'':val)+'"></div>';}
       var vl=v.source==='billetterie';
-      return '<details class="vrow'+(vl?' vlocked':'')+'" data-key="vd-'+esc(v.id)+'"'+(openSet.has('vd-'+v.id)?' open':'')+'><summary class="vsum"><div class="vhead"><b>'+(vl?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> ':'')+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOf(v.date))+' · net '+eur(netOf(v))+'</span>'+
+      return '<details class="vrow'+(vl?' vlocked':'')+'" data-key="vd-'+esc(v.id)+'"'+(openSet.has('vd-'+v.id)?' open':'')+'><summary class="vsum"><div class="vhead"><b>'+(vl?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> ':'')+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOfSale(v))+' · net '+eur(netOf(v))+'</span>'+
         '<span class="src '+(v.source==='billetterie'?'bil':'man')+'">'+esc(srcLabel(v))+'</span>'+
         '<span class="muted">Vendu par (a reçu le virement) : <b>'+esc(sellerLabel(v))+'</b></span>'+
         '<span class="src '+(v.reglement==='attente'?'man':'bil')+'">'+(v.reglement==='attente'?'Règlement du club en attente':'Règlement versé')+'</span></div><span class="chev" aria-hidden="true"></span></summary>'+
@@ -932,7 +933,7 @@ function exportXlsx(){
   list.forEach(function(v,i){
     var r=i+1,R=r+1,d=new Date(v.date+'T00:00:00Z');
     function put(c,cell){ws[X.utils.encode_cell({r:r,c:c})]=cell;}
-    put(0,{t:'d',v:d,z:'dd/mm/yyyy'});put(1,{t:'s',v:v.label||''});put(2,{t:'s',v:seasonOf(v.date)});put(3,{t:'s',v:fiscalOf(v.date)});
+    put(0,{t:'d',v:d,z:'dd/mm/yyyy'});put(1,{t:'s',v:v.label||''});put(2,{t:'s',v:seasonOfSale(v)});put(3,{t:'s',v:fiscalOf(v.date)});
     put(4,{t:'n',v:v.price,z:EUR});put(5,{t:'n',v:v.fee,z:EUR});
     put(6,{t:'n',v:netOf(v),f:'E'+R+'-F'+R,z:EUR});put(7,{t:'n',v:netOf(v)/2,f:'G'+R+'/2',z:EUR});
     put(8,{t:'s',v:v.by||''});put(9,{t:'s',v:v.note||''});put(10,{t:'s',v:v.seller||''});put(12,{t:'s',v:v.sellerSrc==='billetterie'?'Billetterie (titulaire du compte bancaire)':('Saisi à la main'+(v.sellerBy?' par '+v.sellerBy:''))});put(13,{t:'s',v:v.reglement==='attente'?'En attente':'Versé'});put(11,{t:'s',v:v.source==='billetterie'?'Billetterie'+(v.edited?' (modifiée par '+v.edited+')':''):'Saisie manuelle'});
@@ -970,8 +971,8 @@ function exportXlsx(){
   }
   var wb=X.utils.book_new();
   X.utils.book_append_sheet(wb,ws,'Ventes');
-  X.utils.book_append_sheet(wb,summary(groupBy(list,seasonOf).reverse(),'C','Saison'),'Par saison');
-  X.utils.book_append_sheet(wb,summary(groupBy(list,fiscalOf).reverse(),'D','Année fiscale'),'Par année fiscale');
+  X.utils.book_append_sheet(wb,summary(groupBy(list,seasonOfSale).reverse(),'C','Saison'),'Par saison');
+  X.utils.book_append_sheet(wb,summary(groupBy(list,function(v){return fiscalOf(v.date);}).reverse(),'D','Année fiscale'),'Par année fiscale');
   (function(){
     var us=sellers(),b=balance(),tl=transfers.slice().reverse(),tn=tl.length,tlast=Math.max(tn+1,2),ub=us.length;
     var tv={};['Date','De','Vers','Montant','Note','Saisi par'].forEach(function(h,c){tv[X.utils.encode_cell({r:0,c:c})]={t:'s',v:h};});
@@ -1434,4 +1435,4 @@ function configured(){
 </script>
 </body>
 </html>
-<!-- build sync-err -->
+<!-- build saison-vente -->
