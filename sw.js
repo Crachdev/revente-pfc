@@ -3,7 +3,16 @@
  * Stratégie : Network-first avec cache de secours pour les assets statiques.
  */
 
-const CACHE_NAME = "pfc-revente-v1";
+const CACHE_NAME = "pfc-revente-v2";
+
+// Bibliothèques tierces à garder pour un démarrage hors connexion
+const LIBS = [
+  "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js",
+  "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js",
+  "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+];
+const isLib = u => LIBS.indexOf(u) >= 0;
 
 // Assets à précacher au premier install
 const PRECACHE = [
@@ -19,7 +28,8 @@ const PRECACHE = [
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE))
+      .then(cache => cache.addAll(PRECACHE).then(() => Promise.all(LIBS.map(u =>
+        fetch(new Request(u, { mode: "no-cors" })).then(r => cache.put(u, r)).catch(() => {})))))
       .then(() => self.skipWaiting())
       .catch(() => self.skipWaiting())
   );
@@ -37,20 +47,21 @@ self.addEventListener("activate", event => {
 /* ── Fetch : Network-first, fallback cache ── */
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
-  // Ne pas intercepter Firebase / Firestore
-  if (event.request.url.includes("firestore") || event.request.url.includes("firebase")) return;
-  if (event.request.url.includes("fonts.googleapis") || event.request.url.includes("fonts.gstatic")) return;
+  const url = event.request.url;
+  // Ne pas intercepter les appels de données Firebase (API Firestore / Auth) ni les polices
+  if (/firestore\.googleapis|identitytoolkit|securetoken|firebaseinstallations|googleapis\.com\/(?!css)/.test(url) && !isLib(url)) return;
+  if (url.includes("fonts.googleapis") || url.includes("fonts.gstatic")) return;
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        if (response && response.status === 200 && response.type !== "opaque") {
+        if (response && ((response.status === 200 && response.type !== "opaque") || (isLib(url) && response.type === "opaque"))) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request, { ignoreSearch: true }))
   );
 });
 
