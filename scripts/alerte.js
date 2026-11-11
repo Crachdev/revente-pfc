@@ -1,6 +1,7 @@
 // Envoie un e-mail quotidien (12h Paris) si des actions sont à faire. Même grille de prix que l'appli.
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const { suivi } = require('./suivi');
 const parisHour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Paris',hour:'2-digit',hour12:false}).format(new Date()));
 if (process.env.FORCE !== 'true' && parisHour !== 12) { console.log('Pas 12h à Paris, on sort.'); process.exit(0); }
 
@@ -46,8 +47,10 @@ async function sendPush(db, title, body){
   const cfg=Object.assign({},DEF,(await db.doc('revente_config/main').get()).data()||{});
   const snap=await db.collection('revente_matches').get();
   const items=[];
+  const all=[];
   snap.forEach(d=>{
     const m={id:d.id,...d.data()}; if(!m.date) return;
+    all.push(m);
     const J=Math.round((D(m.date)-D(today))/86400000); if(J<0) return;
     if(m.status==='vendue'||m.status==='gardee') return;
     const p=plan(m,J,cfg);
@@ -55,6 +58,13 @@ async function sendPush(db, title, body){
     else if(m.status==='enligne'){ const L=num(m.listed); if(p!=null&&L!=null&&p<L) items.push({pr:1,J,t:`<b>Baisser le prix</b> — ${m.opp} (${jl(J)}) : de ${eur(L)} à ${eur(p)}.`}); }
     else if(m.status==='attente'&&J<=N(cfg.watchFrom)) items.push({pr:2,J,t:`<b>Surveiller</b> — ${m.opp} (${jl(J)}) : revente pas encore vue.`});
   });
+  // Rappels de suivi : règlements en retard, matchs à clôturer, solde entre les deux personnes
+  try{
+    const vd=(await db.doc('revente_config/ventes').get()).data()||{};
+    const lst=o=>Object.keys(o||{}).map(k=>Object.assign({id:k},o[k]));
+    const wd=new Date(D(today)).getUTCDay();
+    suivi(lst(vd.v),lst(vd.t),all,today,wd).forEach(x=>items.push({pr:x.pr,J:999,t:x.t}));
+  }catch(e){ console.error('Suivi ignoré :',e.message||e); }
   items.sort((a,b)=>a.pr-b.pr||a.J-b.J);
   if(!items.length){
     console.log('Rien à signaler.');
