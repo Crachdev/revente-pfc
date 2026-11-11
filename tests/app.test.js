@@ -44,6 +44,11 @@ async function open(browser, failSnap) {
     const txt = await p.$eval('section[aria-label="Par saison"]', e => e.innerText);
     assert.ok(/2026-27/.test(txt) && /295,44/.test(txt), txt);
   });
+  await t('libellés : « (J9) » devient « (journée 9) »', async () => {
+    const txt = await p.evaluate(() => { return document.body.textContent; });
+    assert.ok(!/\(J\d+\)/.test(txt), 'reste un (Jn) : ' + (txt.match(/.{30}\(J\d+\).{10}/) || [''])[0]);
+    assert.ok(/journée \d/.test(txt));
+  });
   await t('une vente de juillet pour un match de novembre compte dans la saison du match', async () => {
     await p.click('details[data-key="addv"] summary').catch(() => {});
     const mid = await p.$eval('#v-match', e => [...e.options].filter(o => /Le Mans/.test(o.text)).map(o => o.value)[0]);
