@@ -3,7 +3,7 @@
  * Stratégie : Network-first avec cache de secours pour les assets statiques.
  */
 
-const CACHE_NAME = "pfc-revente-v3";
+const CACHE_NAME = "pfc-revente-v4";
 
 // Bibliothèques tierces à garder pour un démarrage hors connexion
 const LIBS = [
@@ -30,7 +30,7 @@ self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(PRECACHE).then(() => Promise.all(LIBS.map(u =>
-        fetch(new Request(u, { mode: "no-cors" })).then(r => cache.put(u, r)).catch(() => {})))))
+        fetch(new Request(u, { mode: u.indexOf("cdnjs") >= 0 ? "cors" : "no-cors" })).then(r => cache.put(u, r)).catch(() => {})))))
       .then(() => self.skipWaiting())
       .catch(() => self.skipWaiting())
   );
