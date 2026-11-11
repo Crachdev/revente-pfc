@@ -69,6 +69,8 @@ La grille de prix existe dans l'appli et dans `scripts/alerte.js` (constante `DE
 
 Les collections `revente_matches` et `revente_config` doivent n'être lisibles et modifiables que par les deux comptes (Rachid et Sylvain), et l'inscription libre doit être désactivée dans Firebase Authentication.
 
+Le texte des règles à publier se trouve dans `firestore.rules` (Firebase → Firestore Database → Règles → Publier). Ce fichier n'est qu'une copie de référence : il faut le coller dans la console, il ne se déploie pas tout seul. L'alerte quotidienne et la sauvegarde utilisent un accès administrateur qui ignore ces règles.
+
 ## Limites connues
 
 - Pas de détection automatique des ouvertures de revente (site du club protégé contre les robots).

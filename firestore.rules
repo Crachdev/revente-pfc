@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Revente Paris FC : uniquement Rachid et Sylvain.
+    function autorise() {
+      return request.auth != null
+        && request.auth.token.email in [
+          'rachid@parisfc-revente.fr',
+          'sylvain@parisfc-revente.fr'
+        ];
+    }
+
+    match /revente_matches/{doc} { allow read, write: if autorise(); }
+    match /revente_config/{doc}  { allow read, write: if autorise(); }
+  }
+}
