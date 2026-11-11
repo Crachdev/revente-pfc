@@ -9,7 +9,7 @@ async function t(name, fn) { try { await fn(); results.push(['OK ', name]); } ca
 async function open(browser, failSnap) {
   const p = await browser.newPage({ viewport: { width: 400, height: 900 } });
   const errs = []; p.on('pageerror', e => errs.push(e.message));
-  p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+  p.on('console', m => { if (m.type() === 'error' && !/integrity|xlsx/i.test(m.text())) errs.push(m.text()); }); // faux xlsx vide : rejete par SRI
   await p.route('**/*', r => {
     const u = r.request().url();
     if (u.startsWith('file://')) return r.continue();
