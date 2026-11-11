@@ -92,23 +92,17 @@ async function open(browser, failSnap) {
   });
   await p.close();
 
-  await t('rappels de suivi : règlement en retard, match à clôturer, solde du lundi', async () => {
+  await t('rappels de suivi : seulement le règlement du club en retard', async () => {
     const { suivi } = require(path.join(root, 'scripts/suivi.js'));
     const V = [
       { seller: 'Rachid', price: 54, fee: 0, date: '2026-11-01', reglement: 'attente', label: 'Monaco' },
       { seller: 'Rachid', price: 58, fee: 6.96, date: '2026-10-18', reglement: 'verse', label: 'Rennes' },
       { seller: 'Sylvain', price: 32, fee: 0, date: '2026-08-30', reglement: 'verse', label: 'Nice' }];
-    const M = [{ opp: 'Angers', date: '2026-11-08', status: 'enligne' }, { opp: 'Nice', date: '2026-08-30', status: 'attente' }, { opp: 'Lyon', date: '2026-11-08', status: 'vendue' }];
-    const a = suivi(V, [], M, '2026-11-12', 2).map(x => x.t).join('|');
+    const M = [{ opp: 'Angers', date: '2026-11-08', status: 'enligne' }];
+    const a = suivi(V, [], M, '2026-11-12', 1).map(x => x.t).join('|');
     assert.ok(/en attente depuis 11 jours/.test(a), a);
-    assert.ok(/Angers/.test(a) && !/Nice/.test(a) && !/Lyon/.test(a), a);
-    assert.ok(!/Virement entre vous/.test(a), 'pas de solde hors lundi');
-    const b = suivi(V, [], M, '2026-11-09', 1).map(x => x.t).join('|');
-    assert.ok(/Rachid doit encore 36,52.*à Sylvain/.test(b), b);
-    const c = suivi(V, [{ from: 'Rachid', to: 'Sylvain', amount: 20 }], [], '2026-11-09', 1).map(x => x.t).join('|');
-    assert.ok(/Rachid doit encore 16,52.*à Sylvain/.test(c), c);
-    const d = suivi(V, [{ from: 'Rachid', to: 'Sylvain', amount: 36.52 }], [], '2026-11-09', 1);
-    assert.strictEqual(d.length, 0, 'soldé : aucun rappel');
+    assert.ok(!/Virement|Angers|doit encore/.test(a), 'ni dette ni clôture : ' + a);
+    assert.strictEqual(suivi(V, [], M, '2026-11-05', 1).length, 0, 'pas de rappel avant 10 jours');
   });
   await t('grille de prix identique dans l’appli et dans le script d’alerte', async () => {
     const re = /\{basePrice:null,markup:0,drop7:\d+,drop3:\d+,floorPct:\d+,watchFrom:\d+/;
