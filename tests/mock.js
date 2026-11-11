@@ -29,7 +29,7 @@ module.exports=`
         if(p==='bon'){user=mk(e);return Promise.resolve();}
         var er=new Error('bad');er.code='auth/invalid-credential';return Promise.reject(er);},
       signOut:function(){user=null;return Promise.resolve();}};},
-    firestore:function(){return {enableIndexedDbPersistence:function(){return Promise.resolve();},collection:colRef,
+    firestore:function(){return {enablePersistence:function(){return Promise.resolve();},collection:colRef,
       batch:function(){var ops=[];return {set:function(r,d){ops.push([r,d]);},commit:function(){ops.forEach(function(o){store[o[0].__col][o[0].__id]=o[1];});window.__log.push(['batch',ops.length]);return Promise.resolve();}};}};}};
 window.firebase.firestore.FieldValue={delete:function(){return '__DEL__';}};
 window.firebase.auth.EmailAuthProvider={credential:function(e,p){return {e:e,p:p};}};
