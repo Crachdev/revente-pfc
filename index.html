@@ -273,6 +273,7 @@ function whenLabel(m){
   var wd=new Intl.DateTimeFormat('fr-FR',{weekday:'long',timeZone:'UTC'}).format(d);
   return wd+(m.time?' '+String(m.time).replace(':','h'):'');
 }
+function labelFmt(l){return String(l||'').replace(/\(J(\d+)\)/g,'(journée $1)');}
 function jLabel(J){return J<0?'il y a '+(-J)+' j':(J===0?'Jour J':'J-'+J);}
 function ago(iso){
   var t=new Date(iso).getTime();if(isNaN(t))return '';
@@ -790,7 +791,7 @@ function checkView(){
   var it=[],b=balance(),td=parisToday();
   var days=function(d){var a=String(d).split('-').map(Number),c=td.split('-').map(Number);return Math.round((Date.UTC(c[0],c[1]-1,c[2])-Date.UTC(a[0],a[1]-1,a[2]))/864e5);};
   if(b.un)it.push(b.un+' vente(s) sans vendeur renseigné.');
-  ventes.forEach(function(v){if(v.reglement==='attente'&&v.date&&days(v.date)>10)it.push('Règlement du club en attente depuis '+days(v.date)+' jours : '+esc(v.label||'vente')+' ('+eur(netOf(v))+').');});
+  ventes.forEach(function(v){if(v.reglement==='attente'&&v.date&&days(v.date)>10)it.push('Règlement du club en attente depuis '+days(v.date)+' jours : '+esc(labelFmt(v.label)||'vente')+' ('+eur(netOf(v))+').');});
   var debt=b.rows.filter(function(r){return r.bal>0.005;}),cred=b.rows.filter(function(r){return r.bal<-0.005;});
   if(debt.length===1&&cred.length===1)it.push(esc(debt[0].n)+' doit encore '+eur(debt[0].bal)+' à '+esc(cred[0].n)+(transfers.length?'':' (aucun virement enregistré)')+'.');
   if(!it.length)return '<section class="panel" aria-label="Contrôle"><p class="note">✓ Rien à vérifier : les données sont complètes.</p></section>';
@@ -906,7 +907,7 @@ function financeView(){
     h+='<section class="panel" aria-labelledby="h-det"><h2 id="h-det">Détail des ventes</h2><div class="vlist">'+list.map(function(v){
       function f(label,field,val,type){return '<div class="fld"><label for="vf-'+field+'-'+esc(v.id)+'">'+label+'</label><input id="vf-'+field+'-'+esc(v.id)+'"'+(lockedVente(v,field)?' disabled':'')+' type="'+type+'" '+(type==='number'?'inputmode="decimal" step="0.01" min="0" ':'')+'data-vf="'+field+'" data-vid="'+esc(v.id)+'" value="'+esc(val==null?'':val)+'"></div>';}
       var vl=v.source==='billetterie';
-      return '<details class="vrow'+(vl?' vlocked':'')+'" data-key="vd-'+esc(v.id)+'"'+(openSet.has('vd-'+v.id)?' open':'')+'><summary class="vsum"><div class="vhead"><b>'+(vl?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> ':'')+esc(v.label||'Vente')+'</b><span class="muted">'+esc(seasonOfSale(v))+' · net '+eur(netOf(v))+'</span>'+
+      return '<details class="vrow'+(vl?' vlocked':'')+'" data-key="vd-'+esc(v.id)+'"'+(openSet.has('vd-'+v.id)?' open':'')+'><summary class="vsum"><div class="vhead"><b>'+(vl?'<span class="lockic" role="img" aria-label="Verrouillé">'+LOCK_SVG+'</span> ':'')+esc(labelFmt(v.label)||'Vente')+'</b><span class="muted">'+esc(seasonOfSale(v))+' · net '+eur(netOf(v))+'</span>'+
         '<span class="src '+(v.source==='billetterie'?'bil':'man')+'">'+esc(srcLabel(v))+'</span>'+
         '<span class="muted">Vendu par (a reçu le virement) : <b>'+esc(sellerLabel(v))+'</b></span>'+
         '<span class="src '+(v.reglement==='attente'?'man':'bil')+'">'+(v.reglement==='attente'?'Règlement du club en attente':'Règlement versé')+'</span></div><span class="chev" aria-hidden="true"></span></summary>'+
@@ -966,7 +967,7 @@ function exportXlsx(){
   list.forEach(function(v,i){
     var r=i+1,R=r+1,d=new Date(v.date+'T00:00:00Z');
     function put(c,cell){ws[X.utils.encode_cell({r:r,c:c})]=cell;}
-    put(0,{t:'d',v:d,z:'dd/mm/yyyy'});put(1,{t:'s',v:v.label||''});put(2,{t:'s',v:seasonOfSale(v)});put(3,{t:'s',v:fiscalOf(v.date)});
+    put(0,{t:'d',v:d,z:'dd/mm/yyyy'});put(1,{t:'s',v:labelFmt(v.label)});put(2,{t:'s',v:seasonOfSale(v)});put(3,{t:'s',v:fiscalOf(v.date)});
     put(4,{t:'n',v:v.price,z:EUR});put(5,{t:'n',v:v.fee,z:EUR});
     put(6,{t:'n',v:netOf(v),f:'E'+R+'-F'+R,z:EUR});put(7,{t:'n',v:netOf(v)/2,f:'G'+R+'/2',z:EUR});
     put(8,{t:'s',v:v.by||''});put(9,{t:'s',v:v.note||''});put(10,{t:'s',v:v.seller||''});put(12,{t:'s',v:v.sellerSrc==='billetterie'?'Billetterie (titulaire du compte bancaire)':('Saisi à la main'+(v.sellerBy?' par '+v.sellerBy:''))});put(13,{t:'s',v:v.reglement==='attente'?'En attente':'Versé'});put(11,{t:'s',v:v.source==='billetterie'?'Billetterie'+(v.edited?' (modifiée par '+v.edited+')':''):'Saisie manuelle'});
@@ -1468,4 +1469,4 @@ function configured(){
 </script>
 </body>
 </html>
-<!-- build fix-persistence -->
+<!-- build journee -->
