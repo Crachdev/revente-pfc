@@ -1384,7 +1384,7 @@ function configured(){
   }
   if(!firebase.apps.length)firebase.initializeApp(CFGX.FIREBASE);
   auth=firebase.auth();db=firebase.firestore();
-  db.enableIndexedDbPersistence().catch(function(){});
+  try{var pp=db.enablePersistence({synchronizeTabs:true});if(pp&&pp.catch)pp.catch(function(){});}catch(e){}
   var first=true;
   auth.onAuthStateChanged(function(u){
     if(!first)return;first=false;
@@ -1468,4 +1468,4 @@ function configured(){
 </script>
 </body>
 </html>
-<!-- build stats -->
+<!-- build fix-persistence -->
