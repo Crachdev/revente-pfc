@@ -40,6 +40,16 @@ async function open(browser, failSnap) {
     const txt = await p.$eval('#h-stat', e => e.parentElement.innerText);
     assert.ok(/Ventes analysées\s*5/.test(txt) && /Estimation indicative/.test(txt) && /Peu de données/.test(txt), txt);
   });
+  await t('statistiques : l’ouverture de revente compte même sans vente', async () => {
+    await p.click('[data-act="tab"][data-v="matchs"]'); await p.waitForTimeout(150);
+    const btns = await p.$$('button[data-act="status"][data-v="ouverte"]');
+    assert.ok(btns.length > 3, 'boutons de statut introuvables');
+    await btns[btns.length - 1].evaluate(b => { const d = b.closest('details'); if (d) d.open = true; });
+    await btns[btns.length - 1].click(); await p.waitForTimeout(300);
+    await p.click('[data-act="tab"][data-v="fin"]'); await p.waitForTimeout(150);
+    const txt = await p.evaluate(() => document.body.innerText);
+    assert.ok(/Revente vue ouverte avant le match\s*\d+(\.\d+)? jours \(sur 1\)/.test(txt), (txt.match(/Revente vue ouverte[^\n]*\n[^\n]*/) || [''])[0]);
+  });
   await t('totaux par saison', async () => {
     const txt = await p.$eval('section[aria-label="Par saison"]', e => e.innerText);
     assert.ok(/2026-27/.test(txt) && /295,44/.test(txt), txt);
