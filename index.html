@@ -840,9 +840,10 @@ function statsData(){
   var we=rows.filter(function(r){return r.m&&r.m.weekend;}).map(function(r){return r.gross;}),wk=rows.filter(function(r){return r.m&&!r.m.weekend;}).map(function(r){return r.gross;});
   var soldJ=[],openJ=[],listD=[];
   matches.forEach(function(m){
-    if(m.status!=='vendue'||!m.date)return;
-    if(m.soldOn){var j=daysBetween(m.soldOn,m.date);if(j>=0)soldJ.push(j);}
+    if(!m.date)return;
     if(m.openedOn){var o=daysBetween(m.openedOn,m.date);if(o>=0)openJ.push(o);}
+    if(m.status!=='vendue')return;
+    if(m.soldOn){var j=daysBetween(m.soldOn,m.date);if(j>=0)soldJ.push(j);}
     if(m.listedOn&&m.soldOn){var d=daysBetween(m.listedOn,m.soldOn);if(d>=0)listD.push(d);}
   });
   return {n:rows.length,gross:gross,nets:nets,med:median(gross),min:gross.length?Math.min.apply(null,gross):null,max:gross.length?Math.max.apply(null,gross):null,avgNet:avgOf(nets),we:we,wk:wk,soldJ:soldJ,openJ:openJ,listD:listD};
@@ -1471,4 +1472,4 @@ function configured(){
 </script>
 </body>
 </html>
-<!-- build prix-paire -->
+<!-- build stats-ouverture -->
