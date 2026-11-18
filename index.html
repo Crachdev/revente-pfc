@@ -400,7 +400,7 @@ function card(r){
       '<ul class="tiers">'+p.tiers.map(function(t){return '<li class="'+(t.cur?'cur':'')+'"><span>'+t.k+'</span><b>'+eur(t.price)+'</b></li>';}).join('')+'</ul>'+
       '<p class="note">Prochaine baisse : '+nextTxt+'</p></div>';
   }else if(!isPast){
-    planHtml='<div class="plan"><p class="note">Renseigne un prix de base par place dans « Grille de prix » (ou un prix de départ pour ce match ci-dessous) pour voir les prix conseillés.</p></div>';
+    planHtml='<div class="plan"><p class="note">Renseigne un prix de base de la paire dans « Grille de prix » (ou un prix de départ pour ce match ci-dessous) pour voir les prix conseillés.</p></div>';
   }
   var acts='';
   if(p&&(m.status==='attente'||m.status==='ouverte')) acts+='<button type="button" class="btn small" data-act="posted" data-id="'+id+'" data-v="'+p.now+'">Posté à '+eur(p.now)+'</button>';
@@ -434,7 +434,7 @@ function card(r){
     (acts&&!lockN?'<div class="acts">'+acts+'</div>':'')+
     qs+
     (isPast?'':'<div class="acts"><a class="btn ghost small" href="'+esc(gcalUrl(m))+'" target="_blank" rel="noopener">Google Agenda</a><button type="button" class="btn ghost small" data-act="ics" data-id="'+id+'">Autre agenda (.ics)</button>'+('share' in navigator?'<button type="button" class="btn ghost small" data-act="share" data-id="'+id+'">Partager</button>':'')+'</div>')+
-    '<div class="grid">'+fld('Prix de départ, ce match (€ par place)','paid',m.paid,'Facultatif : vide = prix de base de la grille')+fld('Plancher (€)','floor',m.floor,'Vide : plancher de la grille')+fld('Prix affiché (€)','listed',listed)+fld('Revente vue ouverte le','openedOn',m.openedOn||'','Sert à apprendre le moment d’ouverture')+'</div>'+
+    '<div class="grid">'+fld('Prix de départ, ce match (€ la paire)','paid',m.paid,'Facultatif : vide = prix de base de la grille')+fld('Plancher (€)','floor',m.floor,'Vide : plancher de la grille')+fld('Prix affiché (€)','listed',listed)+fld('Revente vue ouverte le','openedOn',m.openedOn||'','Sert à apprendre le moment d’ouverture')+'</div>'+
     (lockN?'<p class="note">Verrouillé : le prix de cette vente a été récupéré depuis la billetterie.</p>':'')+
     (info.length?'<p class="note">'+info.join(' · ')+'</p>':'')+
     '</div></details>';
@@ -450,7 +450,7 @@ function settings(){
   return '<details class="panel set" data-key="cfg"'+(openSet.has('cfg')?' open':'')+'><summary><span class="h2">Grille de prix</span><span class="chev" aria-hidden="true"></span></summary>'+
     '<p class="note">Valeurs de départ à ajuster. Elles s’appliquent à tous les matchs sans prix propre, pour vous deux.</p>'+
     '<div class="grid" style="margin-top:12px">'+
-    f('Prix de base par place (€)','basePrice',num(cfg.basePrice),'Prix de départ à l’ouverture de la revente (les places sont dans l’abonnement)')+
+    f('Prix de base de la paire (€)','basePrice',num(cfg.basePrice),'Prix de départ à l’ouverture de la revente (les places sont dans l’abonnement)')+
     f('Majoration à l’ouverture (%)','markup',cfg.markup,'0 : tu pars du prix de base')+
     f('Baisse à J-7 (%)','drop7',cfg.drop7)+
     f('Baisse à J-3 (%)','drop3',cfg.drop3)+
@@ -1471,4 +1471,4 @@ function configured(){
 </script>
 </body>
 </html>
-<!-- build prix-depart -->
+<!-- build prix-paire -->
